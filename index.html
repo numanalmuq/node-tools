@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Node Tools — Small Tools. Big Work.</title>
+<meta name="description" content="Small Tools. Big Work.">
+<meta name="theme-color" content="#E7E5E1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..900&family=JetBrains+Mono:wght@500;700&display=swap">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%23FFDE59'/%3E%3Crect x='2' y='2' width='28' height='28' fill='none' stroke='%23000' stroke-width='4'/%3E%3Ctext x='16' y='23' font-size='18' font-weight='900' text-anchor='middle' font-family='Arial'%3EN%3C/text%3E%3C/svg%3E">
+<!--
+  NODE TOOLS — engine. Gak perlu diedit lagi buat nambah tool baru.
+  Tambah tool: buat tools/<slug>.html (taruh <script src="../guard.js"></script> PALING ATAS <head>-nya), lalu isi data.json (name, description, thumbnail).
+
+  SETUP WAJIB sebelum online (tanpa ini akses login/akses gak akan jalan):
+  1. Firebase Console (console.firebase.google.com) -> buat project -> Authentication -> Sign-in method -> aktifkan provider Google SAJA.
+     -> Authentication -> Settings -> Authorized domains -> tambahin domain kamu.
+     -> Project settings -> copy config object, ganti firebaseConfig di bawah. HARUS SAMA PERSIS dengan yang di guard.js.
+  2. Firestore Database -> Create database (mode production, region terserah).
+  3. Deploy firestore.rules (file terpisah yang aku buatin) -> tempel di Firestore Console > Rules lalu Publish,
+     atau lewat CLI: firebase deploy --only firestore:rules
+     WAJIB dilakukan -- tanpa rules ini siapa pun bisa kasih diri sendiri akses tak terbatas lewat browser console.
+  4. Email admin ada di 2 tempat, kalau mau ganti/nambah HARUS diubah di keduanya biar konsisten:
+     - ADMIN_EMAILS di script bawah (cuma buat nampilin tombol Admin)
+     - fungsi isAdmin() di firestore.rules (ini yang beneran nentuin siapa yang boleh nambah akses)
+-->
+
+<!-- ===== Firebase: Auth (Google only) + Firestore (akses 1 jam/hari + jalur admin) ===== -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
+  import {
+    getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut
+  } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
+  import {
+    getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
+    collection, query, where, getDocs, updateDoc
+  } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
+
+  // GANTI dengan config Firebase project kamu sendiri (lihat komentar di atas). Harus sama persis dengan guard.js.
+  const firebaseConfig = {
+    apiKey: "AIzaSyD6H9BVv-8lMi-YM7i69cjattWzMBHfHkg",
+    authDomain: "node-tools-ctfy.firebaseapp.com",
+    projectId: "node-tools-ctfy",
+    storageBucket: "node-tools-ctfy.firebasestorage.app",
+    messagingSenderId: "1065352327411",
+    appId: "1:1065352327411:web:904f269ddfaf86edb7c786"
+  };
+  const ADMIN_EMAILS = ['myxrin2748@gmail.com', 'namskyfr@gmail.com'];
+  const ONE_HOUR = 60 * 60 * 1000;
+  const ONE_DAY = 24 * ONE_HOUR;
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db = getFirestore(app);
+  const provider = new GoogleAuthProvider();
+
+  // Pakai redirect (bukan popup) biar tetap jalan di in-app browser TikTok/Instagram
+  window.ntFirebaseSignIn = () => signInWithRedirect(auth, provider);
+  window.ntFirebaseSignOut = () => signOut(auth);
+  getRedirectResult(auth).catch((err) => console.error('[Node Tools] Login error:', err));
+
+  // Dipanggil dari form admin di script bawah. Nyari akun lewat email, lalu perpanjang accessUntil-nya.
+  window.ntAdminGrant = async (targetEmail, hours) => {
+    const email = String(targetEmail || '').trim().toLowerCase();
+    const h = Number(hours);
+    if (!email) throw new Error('Email belum diisi.');
+    if (!Number.isFinite(h) || h < 1 || h > 24) throw new Error('Durasi harus 1-24 jam.');
+    const snaps = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
+    if (snaps.empty) throw new Error('Akun ini belum pernah login ke Node Tools.');
+    const targetRef = snaps.docs[0].ref;
+    const current = Number(snaps.docs[0].data().accessUntil || 0);
+    const newUntil = Math.max(current, Date.now()) + h * ONE_HOUR;
+    await updateDoc(targetRef, { accessUntil: newUntil, updatedAt: serverTimestamp() });
+    return newUntil;
+  };
+
+  // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun, akun yang klaim jatah hari ini.
+  window.ntAdminStats = async () => {
+    const snaps = await getDocs(collection(db, 'users'));
+    const now = Date.now(), today = Math.floor(now / ONE_DAY);
+    let left = 0, todayCount = 0;
+    snaps.forEach((s) => {
+      const d = s.data();
+      left += Math.max(0, Number(d.accessUntil || 0) - now);
+      if ((d.lastFreeGrantDay ?? -1) === today) todayCount++;
+    });
+    return { members: snaps.size, hours: Math.ceil(left / ONE_HOUR), today: todayCount };
+  };
+
+  let unsubscribe = null;
+
+  onAuthStateChanged(auth, async (user) => {
+    if (unsubscribe) { unsubscribe(); unsubscribe = null; }
+    if (!user) { window.ntOnAuth && window.ntOnAuth(null); return; }
+
+    const email = (user.email || '').toLowerCase();
+    const isAdmin = ADMIN_EMAILS.includes(email);
+    const ref = doc(db, 'users', user.uid);
+
+    try {
+      const snap = await getDoc(ref);
+      if (!snap.exists()) {
+        await setDoc(ref, { email, accessUntil: 0, lastFreeGrantDay: -1, updatedAt: serverTimestamp() });
+      }
+      // Kasih jatah 1 jam gratis kalau hari ini belum pernah diklaim
+      const fresh = await getDoc(ref);
+      const data = fresh.data() || {};
+      const today = Math.floor(Date.now() / ONE_DAY);
+      if ((data.lastFreeGrantDay ?? -1) < today) {
+        const current = Number(data.accessUntil || 0);
+        const target = Date.now() + ONE_HOUR;
+        const bumped = current > target ? current : target; // gak pernah ngurangin akses admin yg masih lama
+        await setDoc(ref, { email, accessUntil: bumped, lastFreeGrantDay: today, updatedAt: serverTimestamp() }, { merge: true });
+      }
+    } catch (err) {
+      console.error('[Node Tools] Sinkronisasi akses gagal:', err);
+    }
+
+    unsubscribe = onSnapshot(ref, (snap) => {
+      const d = snap.data() || {};
+      window.ntOnAuth && window.ntOnAuth({ uid: user.uid, email, isAdmin, accessUntil: Number(d.accessUntil || 0), claimedToday: Number(d.lastFreeGrantDay ?? -1) === Math.floor(Date.now() / ONE_DAY) });
+    }, (err) => { console.error('[Node Tools] Listener akses gagal:', err); window.ntOnAuthError && window.ntOnAuthError(err); });
+  });
+</script>
+
+<style>
+:root{--ink:#0a0a0a;--paper:#E7E5E1;--card:#F4F2EE;--white:#fff;--blue:#1463F3;--yellow:#FFD21F;--red:#FF6B5B;--line:#C9C6C0;--sans:"Archivo","Arial Black",ui-sans-serif,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+:focus-visible{outline:3px dashed var(--ink);outline-offset:3px}
+body{margin:0;min-height:100vh;display:flex;flex-direction:column;color:var(--ink);font:500 1rem/1.55 var(--mono);background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E");-webkit-text-size-adjust:100%}
+.wrap{width:min(1100px,100%);margin:0 auto;padding-inline:clamp(1.1rem,5vw,2rem)}
+main{flex:1;padding-top:.6rem}
+
+/* Header */
+.top{position:relative;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:clamp(1rem,4vw,1.6rem)}
+.brand{display:flex;align-items:center;gap:.8rem}
+.brand svg{width:clamp(46px,14vw,58px);height:auto;flex:none}
+.brand b{display:block;font:900 clamp(1.45rem,6.4vw,1.85rem)/.92 var(--sans);font-stretch:85%;letter-spacing:-.02em}
+.brand small{display:block;margin-top:.4rem;font-size:.68rem}
+.brand small i{font-style:normal;color:var(--blue)}
+.ic{width:1.35rem;height:1.35rem;flex:none;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:square;stroke-linejoin:miter}
+.iconbtn{display:grid;place-items:center;width:48px;height:48px;padding:0;background:var(--card);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);cursor:pointer;transition:transform .1s,box-shadow .1s}
+.iconbtn:active{--s:1px;transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+.menuwrap{position:relative}
+.menu{position:absolute;right:0;top:calc(100% + .7rem);z-index:20;min-width:220px;background:var(--card);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.menu p{margin:0;padding:.6rem .9rem;border-bottom:3px solid var(--ink);font-size:.72rem;overflow-wrap:anywhere}
+.menu button{display:block;width:100%;padding:.8rem .9rem;background:none;border:0;border-bottom:2px solid var(--ink);color:var(--ink);font:800 .95rem var(--sans);text-align:left;cursor:pointer}
+.menu button:last-child{border-bottom:0}
+.menu button:hover{background:var(--yellow)}
+
+/* Beranda */
+.home{max-width:620px;margin-inline:auto}
+.hero{position:relative;padding-top:1.2rem}
+.hero-cube{position:absolute;right:-1rem;top:.2rem;width:clamp(74px,21vw,112px);height:auto}
+.badge{position:relative;display:inline-block;margin:0 0 .9rem;padding:.3rem .8rem;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font:800 1rem var(--sans)}
+.badge.y{background:var(--yellow)}
+.badge.b{background:var(--blue);color:#fff}
+h1{position:relative;margin:0;font:900 clamp(1.9rem,9.4vw,3.3rem)/1.02 var(--sans);font-stretch:82%;letter-spacing:-.02em}
+.lead{max-width:31ch;margin:1rem 0 1.7rem;font-size:.82rem}
+.panel{margin:0 0 1.7rem;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink)}
+.panel-h{display:flex;align-items:center;gap:.8rem;margin:0;padding:.8rem 1.1rem;background:var(--blue);border-bottom:3px solid var(--ink);font:800 1.05rem var(--sans)}
+.rows{margin:0;padding:.3rem 1.1rem;list-style:none}
+.rows li{display:flex;align-items:center;gap:.9rem;padding:.65rem 0;border-bottom:1.5px solid var(--line)}
+.rows li:last-child{border-bottom:0}
+.rows span{flex:1;font-size:.8rem}
+.rows b{font:900 1.5rem/1 var(--sans);font-variant-numeric:tabular-nums}
+.note{display:flex;align-items:center;gap:.8rem;margin:.4rem 1.1rem 0;padding:1rem 0;border-top:1.5px solid #6b6a68;font-size:.66rem}
+.act{display:flex;align-items:center;gap:1rem;width:100%;margin:0 0 1.4rem;padding:1rem 1.1rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font:800 1.1rem var(--sans);text-align:left;cursor:pointer;transition:transform .1s,box-shadow .1s}
+.act.y{background:var(--yellow)}
+.act span{flex:1}
+.act .ic{width:1.5rem;height:1.5rem}
+.act:hover{--s:8px;transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+.act:active{--s:2px;transform:translate(4px,4px);box-shadow:2px 2px 0 var(--ink)}
+
+/* Sudut terpotong: clip-path memuat area bayangan, garis miring digambar ::after */
+.badge,.panel,.act,.iconbtn{--c:12px;--s:6px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
+.badge::after,.panel::after,.act::after,.iconbtn::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
+.badge{--c:9px;--s:4px}
+.panel{--c:14px;--s:8px}
+.iconbtn{--s:4px;clip-path:polygon(var(--c) 0,100% 0,100% var(--s),calc(100% + var(--s)) var(--s),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)),0 var(--c))}
+.iconbtn::after{right:auto;left:-3px;background:linear-gradient(to bottom right,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
+.act:focus-visible,.iconbtn:focus-visible{outline-offset:-8px}
+
+/* Footer dekoratif */
+.foot{position:relative;flex:none;height:clamp(84px,20vw,130px);margin-top:2rem;overflow:hidden}
+.foot svg{position:absolute;inset:0;width:100%;height:100%}
+.foot p{position:absolute;left:clamp(1.1rem,5vw,2rem);top:34%;margin:0;color:#fff;font-size:.64rem}
+.foot p::after{content:"";display:block;width:26px;height:2px;margin-top:.5rem;background:#fff}
+
+/* Semua tools */
+.bar{display:flex;align-items:center;gap:.9rem;margin:0 0 1.4rem}
+.bar h2{flex:1;margin:0;font:900 clamp(1.4rem,6vw,2rem)/1 var(--sans);letter-spacing:-.03em}
+.chip{padding:.3rem .6rem;background:var(--yellow);border:3px solid var(--ink);font-size:.8rem;white-space:nowrap}
+.search{display:flex;align-items:center;gap:.8rem;max-width:640px;margin:0 0 1.6rem;padding:0 1rem;background:var(--card);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);transition:transform .12s,box-shadow .12s}
+.search:focus-within{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
+.search input{flex:1;min-width:0;padding:.95rem 0;border:0;outline:0;background:none;color:inherit;font:700 1rem var(--mono)}
+.search input::placeholder{color:rgba(0,0,0,.45)}
+.grid{display:grid;gap:clamp(1.25rem,3vw,2rem);grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr))}
+.card{position:relative;display:flex;flex-direction:column;background:var(--card);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);transition:transform .12s,box-shadow .12s}
+.card:hover{transform:translate(-3px,-3px);box-shadow:9px 9px 0 var(--ink)}
+.card:active{transform:translate(3px,3px);box-shadow:2px 2px 0 var(--ink)}
+.thumb{position:relative;overflow:hidden;display:grid;place-items:center;aspect-ratio:16/9;background:var(--c);border-bottom:3px solid var(--ink)}
+.ph{position:relative;display:grid;place-items:center;width:4.5rem;height:4.5rem;background:#fff;border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);font:900 2.2rem var(--sans);transform:rotate(-6deg)}
+.thumb img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0}
+.thumb img.ok{opacity:1}
+.body{display:flex;flex:1;flex-direction:column;gap:.8rem;padding:1.1rem}
+.body h2{margin:0;font:900 1.3rem/1.1 var(--sans);letter-spacing:-.02em;overflow-wrap:anywhere}
+.body p{margin:0;flex:1;font-size:.88rem;overflow-wrap:anywhere}
+.btn{display:block;margin-top:auto;padding:.8rem 1rem;background:var(--c);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font:800 1rem var(--sans);text-align:center;text-decoration:none}
+.btn::after{content:"";position:absolute;inset:0}
+.btn:focus-visible{outline:0}
+.btn:focus-visible::after{outline:4px dashed var(--ink);outline-offset:6px}
+.card:hover .btn{background:var(--ink);color:#fff}
+
+/* States */
+.state{max-width:560px;margin:0;padding:1.1rem 1.3rem;background:var(--card);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font:800 1.1rem var(--sans)}
+.state::before{content:"?";display:inline-grid;place-items:center;width:2rem;height:2rem;margin-right:.8rem;vertical-align:middle;background:var(--ink);color:#fff}
+.state.loading{background:var(--yellow)}
+.state.loading::before{content:"";width:1.3rem;height:1.3rem;animation:spin 1s steps(4) infinite}
+.state.error{background:var(--red)}
+.state.error::before{content:"!"}
+.state.empty{background:var(--blue);color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Gate: login + akses harian abis */
+.gate-wrap{display:flex;justify-content:center;padding:clamp(1.25rem,6vw,3rem) 0}
+.gate{width:100%;max-width:400px;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);overflow:hidden}
+.gate-top{display:grid;place-items:center;padding:2rem 1rem;border-bottom:3px solid var(--ink)}
+#screen-login .gate-top{background:var(--yellow)}
+#screen-noaccess .gate-top{background:var(--blue)}
+#screen-error .gate-top{background:var(--red)}
+.gate-body{padding:1.6rem clamp(1.2rem,4vw,1.8rem)}
+.gate-body h2{margin:0 0 .6rem;font:900 1.5rem/1.1 var(--sans);letter-spacing:-.02em}
+.gate-body p{margin:0 0 1.4rem;font-size:.92rem}
+.gate-btn{display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;padding:.9rem 1rem;background:var(--yellow);color:var(--ink);border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);font:800 1rem var(--sans);cursor:pointer;transition:transform .1s,box-shadow .1s}
+.gate-btn:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
+.gate-btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
+.gate-btn:disabled{opacity:.55;cursor:progress}
+.gate-msg{margin-top:1rem;padding:.6rem .8rem;background:var(--red);border:2px solid var(--ink);font-weight:700;font-size:.85rem}
+.link-btn{background:none;border:0;padding:0;color:var(--ink);font:800 .92rem var(--sans);text-decoration:underline;cursor:pointer}
+
+/* Dialog admin */
+dialog#adminPanel{max-width:380px;width:88vw;padding:0;overflow:hidden;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);font-family:var(--mono);color:var(--ink)}
+dialog#adminPanel::backdrop{background:rgba(0,0,0,.55)}
+.admin-top{padding:1rem 1.4rem;background:var(--yellow);border-bottom:3px solid var(--ink)}
+.admin-top h2{margin:0;font:900 1.15rem var(--sans)}
+.admin-body{padding:1.3rem 1.4rem}
+dialog#adminPanel label{display:block;margin-bottom:1rem;font-weight:700;font-size:.85rem}
+dialog#adminPanel input{display:block;width:100%;margin-top:.4rem;padding:.6rem .7rem;border:3px solid var(--ink);border-radius:0;background:#fff;color:var(--ink);font:700 1rem var(--mono)}
+dialog#adminPanel .row{display:flex;align-items:center;gap:1.1rem;margin-top:.4rem}
+dialog#adminPanel .row .gate-btn{width:auto;flex:1}
+
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7z" fill="currentColor"/></symbol>
+  <symbol id="i-crown" viewBox="0 0 24 24"><path d="M3 8l5 4 4-7 4 7 5-4-2 11H5z" fill="currentColor"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5l-6 6 3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></symbol>
+</defs></svg>
+
+<div class="wrap top">
+  <div class="brand">
+    <svg viewBox="0 0 60 74" aria-hidden="true" fill="#0a0a0a"><path d="M30 4l28 15-28 15L2 19z"/><path d="M2 24l26 14v34L2 58z"/><path d="M58 24L32 38v34l26-14z"/><path d="M8 1h9v10H8z"/></svg>
+    <span><b>Node<br>Tools</b><small>Small Tools. <i>Big Work.</i></small></span>
+  </div>
+  <div id="menuWrap" class="menuwrap" hidden>
+    <button id="menuBtn" class="iconbtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg class="ic"><use href="#i-menu"/></svg></button>
+    <div id="menu" class="menu" hidden>
+      <p id="menuMail"></p>
+      <button id="menuHome" type="button">Beranda</button>
+      <button id="menuTools" type="button">Semua Tools</button>
+      <button id="menuAdd" type="button" hidden>Tambah Akses Jam</button>
+      <button id="menuOut" type="button">Keluar</button>
+    </div>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section id="screen-checking" class="gate-wrap">
+    <div class="state loading" role="status">Memuat...</div>
+  </section>
+
+  <section id="screen-login" class="gate-wrap" hidden>
+    <div class="gate">
+      <div class="gate-top"><span class="ph" aria-hidden="true">🔒</span></div>
+      <div class="gate-body">
+        <h2>Masuk dulu</h2>
+        <p>Login pakai akun Google buat mulai pakai tools. Cuma bisa pakai Google, gak ada mode tamu.</p>
+        <button id="loginBtn" class="gate-btn" type="button">
+          <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+          Masuk dengan Google
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-noaccess" class="gate-wrap" hidden>
+    <div class="gate">
+      <div class="gate-top"><span class="ph" aria-hidden="true">⏳</span></div>
+      <div class="gate-body">
+        <h2>Akses harian abis</h2>
+        <p>Jatah akses gratis kamu hari ini udah kepake semua. Balik lagi besok buat dapat 1 jam baru, atau hubungi admin buat tambahan akses.</p>
+        <button id="logoutBtnNoAccess" class="link-btn" type="button">Keluar</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-error" class="gate-wrap" hidden>
+    <div class="gate">
+      <div class="gate-top"><span class="ph" aria-hidden="true">⚠️</span></div>
+      <div class="gate-body">
+        <h2>Gagal memuat</h2>
+        <p id="errMsg">Ada masalah koneksi. Coba lagi ya.</p>
+        <button id="retryBtn" class="gate-btn" type="button">Coba lagi</button>
+        <div style="margin-top:1rem"><button id="logoutBtnError" class="link-btn" type="button">Keluar</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-home" class="home" hidden>
+    <div class="hero">
+      <svg class="hero-cube" viewBox="0 0 112 152" aria-hidden="true" stroke="#0a0a0a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"><path d="M40 3l7 16M8 22l16 8" fill="none"/><path d="M60 14l46 26-46 26-46-26z" fill="#1463F3"/><path d="M14 40l46 26v52L14 92z" fill="#1463F3"/><path d="M25 56l25 14v25L25 81z" fill="#4A8DFF" stroke="none"/><path d="M106 40L60 66v52l46-26z" fill="#0a0a0a"/><path d="M66 126l40-22v26l-40 22z" fill="#FFD21F"/></svg>
+      <span id="badge" class="badge y">Halo, Admin!</span>
+      <h1>Selamat Datang<br>di Node Tools</h1>
+    </div>
+    <p id="homeDesc" class="lead"></p>
+
+    <section id="panelAdmin" class="panel" hidden>
+      <h2 class="panel-h"><svg class="ic"><use href="#i-crown"/></svg>Mode Admin</h2>
+      <ul class="rows">
+        <li><svg class="ic"><use href="#i-user"/></svg><span>Total Member</span><b id="stMembers">…</b></li>
+        <li><svg class="ic"><use href="#i-clock"/></svg><span>Total Akses Jam</span><b id="stHours">…</b></li>
+        <li><svg class="ic"><use href="#i-cal"/></svg><span>Akses Hari Ini</span><b id="stToday">…</b></li>
+      </ul>
+    </section>
+
+    <section id="panelMember" class="panel" hidden>
+      <h2 class="panel-h"><svg class="ic"><use href="#i-user"/></svg>Akun Member</h2>
+      <ul class="rows">
+        <li><svg class="ic"><use href="#i-clock"/></svg><span>Akses Jam Tersedia</span><b class="js-remain">60:00</b></li>
+        <li><svg class="ic"><use href="#i-cal"/></svg><span>Akses Hari Ini</span><b id="todayN">1</b></li>
+      </ul>
+      <p class="note"><svg class="ic"><use href="#i-info"/></svg>Akses jam akan otomatis berkurang setelah digunakan.</p>
+    </section>
+
+    <button id="addBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses Jam</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+    <button id="allBtn" class="act" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Lihat Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+  </section>
+
+  <section id="screen-tools" hidden>
+    <div class="bar">
+      <button id="backBtn" class="iconbtn" type="button" aria-label="Kembali ke beranda"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
+      <h2>Semua Tools</h2>
+      <span class="chip">Sisa <b class="js-remain">60:00</b></span>
+    </div>
+    <label class="search">
+      <svg class="ic"><use href="#i-search"/></svg>
+      <input id="q" type="search" placeholder="Cari tools..." aria-label="Cari tools" autocomplete="off" spellcheck="false">
+    </label>
+    <div id="state" class="state loading" role="status">Memuat tools...</div>
+    <section id="grid" class="grid" aria-label="Tools"></section>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
+    <polygon points="0,0 45,0 81,40 0,40" fill="#1463F3"/>
+    <polygon points="56,17 76,17 76,8 88,0 100,0 100,40 82,40" fill="#0a0a0a" stroke="#E7E5E1" stroke-width="3" vector-effect="non-scaling-stroke"/>
+  </svg>
+  <p>Node Tools v1.0</p>
+</footer>
+
+<dialog id="adminPanel">
+  <form id="adminForm">
+    <div class="admin-top"><h2>Tambah Akses Jam</h2></div>
+    <div class="admin-body">
+      <label>Email akun Google
+        <input id="adminEmail" type="email" required placeholder="nama@gmail.com" autocomplete="off">
+      </label>
+      <label>Durasi (1–24 jam)
+        <input id="adminHours" type="number" min="1" max="24" value="1" required>
+      </label>
+      <p id="adminMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
+      <div class="row">
+        <button type="submit" class="gate-btn">Tambah akses</button>
+        <button type="button" id="adminClose" class="link-btn">Tutup</button>
+      </div>
+    </div>
+  </form>
+</dialog>
+
+<script>
+(() => {
+  'use strict';
+  const grid = document.getElementById('grid');
+  const stateEl = document.getElementById('state');
+  const input = document.getElementById('q');
+  const COLORS = ['--yellow', '--blue', '--white'];
+  let tools = [];
+  let loaded = false;
+
+  // Normalisasi teks: hilangkan aksen + lowercase (dipakai untuk search & slug)
+  const norm = s => String(s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  // "JSON Formatter" -> "json-formatter"
+  const slugify = s => norm(s).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '');
+
+  const el = (tag, cls, text) => {
+    const n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (text != null) n.textContent = text;
+    return n;
+  };
+
+  const setState = (kind, msg) => {
+    stateEl.className = 'state ' + kind;
+    stateEl.textContent = msg;
+    stateEl.hidden = false;
+  };
+
+  function buildCard(t) {
+    const card = el('article', 'card');
+    card.style.setProperty('--c', 'var(' + COLORS[t.i % COLORS.length] + ')');
+
+    const thumb = el('div', 'thumb');
+    const ph = el('span', 'ph', Array.from(t.name)[0].toUpperCase());
+    thumb.append(ph);
+    if (t.thumb) {
+      const img = new Image();
+      img.alt = '';
+      img.loading = 'lazy';
+      img.onload = () => { img.classList.add('ok'); ph.remove(); };
+      img.onerror = () => img.remove();
+      img.src = t.thumb;
+      thumb.append(img);
+    }
+
+    const body = el('div', 'body');
+    body.append(el('h2', null, t.name));
+    if (t.desc) body.append(el('p', null, t.desc));
+    const btn = el('a', 'btn', 'Buka Tool →');
+    btn.href = t.href;
+    btn.setAttribute('aria-label', 'Buka tool: ' + t.name);
+    body.append(btn);
+
+    card.append(thumb, body);
+    return card;
+  }
+
+  function filter() {
+    const terms = norm(input.value).split(/\s+/).filter(Boolean);
+    let shown = 0;
+    for (const t of tools) {
+      const ok = terms.every(w => t.hay.includes(w));
+      t.node.hidden = !ok;
+      if (ok) shown++;
+    }
+    if (shown) stateEl.hidden = true;
+    else setState('empty', 'Tools gak ketemu.');
+  }
+
+  async function load() {
+    if (loaded) return;
+    loaded = true;
+    setState('loading', 'Memuat tools...');
+    try {
+      const res = await fetch('data.json', { cache: 'no-store' });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      if (!data || !Array.isArray(data.tools)) throw new Error('data.json harus berbentuk {"tools": [...]}');
+
+      tools = data.tools.flatMap((t, i) => {
+        const name = String(t?.name ?? '').trim();
+        const slug = slugify(name);
+        if (!slug) return [];
+        const desc = String(t?.description ?? '').trim();
+        const o = {
+          i, name, desc,
+          thumb: String(t?.thumbnail ?? '').trim(),
+          href: 'tools/' + encodeURIComponent(slug) + '.html',
+          hay: norm(name + ' ' + desc)
+        };
+        o.node = buildCard(o);
+        return [o];
+      });
+
+      if (!tools.length) return setState('empty', 'Belum ada tools.');
+      grid.append(...tools.map(t => t.node));
+      filter();
+    } catch (err) {
+      console.error('[Node Tools]', err);
+      setState('error', 'Gagal memuat tools.');
+      loaded = false;
+    }
+  }
+
+  input.addEventListener('input', () => { if (tools.length) filter(); });
+
+  // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
+  const $ = id => document.getElementById(id);
+  const screens = { checking: $('screen-checking'), login: $('screen-login'), noaccess: $('screen-noaccess'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
+  const menuWrap = $('menuWrap'), menuBtn = $('menuBtn'), menu = $('menu');
+  const adminPanel = $('adminPanel'), adminForm = $('adminForm'), adminMsg = $('adminMsg');
+  const adminEmailInput = $('adminEmail'), adminHoursInput = $('adminHours');
+
+  let countdownTimer = null, authResolved = false, statsLoaded = false;
+  let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,accessUntil}
+  let view = 'home';      // 'home' | 'tools'
+
+  function closeMenu() { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
+  function showScreen(name) {
+    for (const key in screens) screens[key].hidden = key !== name;
+    menuWrap.hidden = name !== 'home' && name !== 'tools';
+    closeMenu();
+  }
+  function go(v) { view = v; window.scrollTo(0, 0); render(); }
+  function stopCountdown() { clearInterval(countdownTimer); countdownTimer = null; }
+
+  const pad = n => String(n).padStart(2, '0');
+  function fmt(ms) {
+    const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60);
+    return (h ? h + ':' + pad(m) : m) + ':' + pad(t % 60);
+  }
+
+  function startCountdown() {
+    stopCountdown();
+    const nodes = document.querySelectorAll('.js-remain');
+    const tick = () => {
+      if (!currentAuth) return stopCountdown();
+      const remain = currentAuth.accessUntil - Date.now();
+      if (remain <= 0) { stopCountdown(); render(); return; }
+      nodes.forEach(n => { n.textContent = fmt(remain); });
+    };
+    tick();
+    countdownTimer = setInterval(tick, 1000);
+  }
+
+  // Statistik panel admin (baca semua akun di Firestore, sekali per sesi + setelah kasih akses)
+  function loadStats(force) {
+    if (!currentAuth || !currentAuth.isAdmin || !window.ntAdminStats) return;
+    if (statsLoaded && !force) return;
+    statsLoaded = true;
+    window.ntAdminStats().then(s => {
+      $('stMembers').textContent = s.members;
+      $('stHours').textContent = s.hours;
+      $('stToday').textContent = s.today;
+    }).catch(err => {
+      console.error('[Node Tools] Statistik admin gagal:', err);
+      ['stMembers', 'stHours', 'stToday'].forEach(id => { $(id).textContent = '–'; });
+    });
+  }
+
+  function paintHome() {
+    const ad = currentAuth.isAdmin;
+    const badge = $('badge');
+    badge.textContent = ad ? 'Halo, Admin!' : 'Halo, Member!';
+    badge.className = 'badge ' + (ad ? 'y' : 'b');
+    $('homeDesc').textContent = ad ? 'Kelola akses dan nikmati semua fitur yang tersedia.' : 'Nikmati akses tools dengan mudah dan cepat.';
+    $('panelAdmin').hidden = !ad;
+    $('panelMember').hidden = ad;
+    $('addBtn').hidden = !ad;
+    $('menuAdd').hidden = !ad;
+    $('menuMail').textContent = currentAuth.email;
+    $('todayN').textContent = currentAuth.claimedToday ? 1 : 0;
+  }
+
+  function render() {
+    if (!authResolved) return showScreen('checking');
+    if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
+    if (currentAuth.accessUntil <= Date.now()) { stopCountdown(); return showScreen('noaccess'); }
+    paintHome();
+    showScreen(view);
+    startCountdown();
+    load();
+    loadStats(false);
+  }
+
+  const signOutNow = () => window.ntFirebaseSignOut && window.ntFirebaseSignOut();
+  const openAdmin = () => { closeMenu(); adminMsg.hidden = true; adminForm.reset(); adminPanel.showModal(); };
+  $('loginBtn').addEventListener('click', () => window.ntFirebaseSignIn && window.ntFirebaseSignIn());
+  $('logoutBtnNoAccess').addEventListener('click', signOutNow);
+  $('menuOut').addEventListener('click', signOutNow);
+  $('allBtn').addEventListener('click', () => go('tools'));
+  $('menuTools').addEventListener('click', () => go('tools'));
+  $('backBtn').addEventListener('click', () => go('home'));
+  $('menuHome').addEventListener('click', () => go('home'));
+  $('addBtn').addEventListener('click', openAdmin);
+  $('menuAdd').addEventListener('click', openAdmin);
+  $('adminClose').addEventListener('click', () => adminPanel.close());
+  menuBtn.addEventListener('click', e => {
+    e.stopPropagation();
+    menu.hidden = !menu.hidden;
+    menuBtn.setAttribute('aria-expanded', String(!menu.hidden));
+  });
+  document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+
+  adminForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const submitBtn = adminForm.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    adminMsg.hidden = true;
+    try {
+      const newUntil = await window.ntAdminGrant(adminEmailInput.value, adminHoursInput.value);
+      adminMsg.textContent = 'Berhasil — akses aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
+      adminMsg.hidden = false;
+      loadStats(true);
+    } catch (err) {
+      adminMsg.textContent = (err && err.message) ? err.message : 'Gagal kasih akses.';
+      adminMsg.hidden = false;
+    } finally {
+      submitBtn.disabled = false;
+    }
+  });
+
+  // Anti muter-terus: kalau Firebase/Firestore gagal atau gak respons, munculin layar error + coba lagi
+  const showError = (msg) => { stopCountdown(); $('errMsg').textContent = msg; showScreen('error'); };
+  window.ntOnAuthError = () => showError('Gagal ambil data akses. Cek koneksi atau aturan Firestore, lalu coba lagi.');
+  $('retryBtn').addEventListener('click', () => location.reload());
+  $('logoutBtnError').addEventListener('click', signOutNow);
+  setTimeout(() => { if (!authResolved) showError('Server gak merespons. Cek koneksi lalu coba lagi.'); }, 12000);
+
+  window.ntOnAuth = (auth) => {
+    if (!auth) view = 'home';
+    currentAuth = auth;
+    authResolved = true;
+    render();
+  };
+  render();
+})();
+</script>
+</body>
+</html>
