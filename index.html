@@ -31,7 +31,7 @@
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
   import {
-    getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut
+    getAuth, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, onAuthStateChanged, signOut
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
@@ -56,10 +56,32 @@
   const db = getFirestore(app);
   const provider = new GoogleAuthProvider();
 
-  // Pakai redirect (bukan popup) biar tetap jalan di in-app browser TikTok/Instagram
-  window.ntFirebaseSignIn = () => signInWithRedirect(auth, provider);
+  provider.setCustomParameters({ prompt: 'select_account' });
+
+  // FIX: signInWithRedirect gagal di GitHub Pages (browser modern memblokir storage lintas-domain),
+  // jadi user balik ke halaman login terus. Pakai POPUP dulu; redirect cuma cadangan
+  // untuk in-app browser (TikTok/Instagram) yang memblokir popup.
+  const explainAuthError = (err) => {
+    console.error('[Node Tools] Login error:', err);
+    const c = err && err.code;
+    if (c === 'auth/unauthorized-domain') alert('Domain ini belum diizinkan di Firebase.\nBuka Firebase Console > Authentication > Settings > Authorized domains, lalu tambahkan: ' + location.hostname);
+    else if (c === 'auth/popup-closed-by-user' || c === 'auth/cancelled-popup-request') { /* user nutup popup, abaikan */ }
+    else alert('Login gagal: ' + (c || (err && err.message) || 'error tidak dikenal'));
+  };
+  window.ntFirebaseSignIn = async () => {
+    try {
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      const c = err && err.code;
+      if (c === 'auth/popup-blocked' || c === 'auth/operation-not-supported-in-this-environment') {
+        try { await signInWithRedirect(auth, provider); } catch (e2) { explainAuthError(e2); }
+      } else {
+        explainAuthError(err);
+      }
+    }
+  };
   window.ntFirebaseSignOut = () => signOut(auth);
-  getRedirectResult(auth).catch((err) => console.error('[Node Tools] Login error:', err));
+  getRedirectResult(auth).catch(explainAuthError);
 
   // Dipanggil dari form admin di script bawah. Nyari akun lewat email, lalu perpanjang accessUntil-nya.
   window.ntAdminGrant = async (targetEmail, hours) => {
