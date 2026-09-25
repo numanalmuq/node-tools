@@ -22,6 +22,9 @@
   3. Deploy firestore.rules (file terpisah yang aku buatin) -> tempel di Firestore Console > Rules lalu Publish,
      atau lewat CLI: firebase deploy --only firestore:rules
      WAJIB dilakukan -- tanpa rules ini siapa pun bisa kasih diri sendiri akses tak terbatas lewat browser console.
+     PENTING: field akses harian sekarang "streak" + "lastClaimDay" (dulu "lastFreeGrantDay"), dan jam yang
+     ditambahin per klaim variatif 1-5 jam (dulu selalu 1 jam) -- kalau firestore.rules kamu masih validasi
+     nama field lama atau kenaikan accessUntil yang di-hardcode 1 jam, klaim bakal ditolak rules. Cek & update rules-nya.
   4. Email admin ada di 2 tempat, kalau mau ganti/nambah HARUS diubah di keduanya biar konsisten:
      - ADMIN_EMAILS di script bawah (cuma buat nampilin tombol Admin)
      - fungsi isAdmin() di firestore.rules (ini yang beneran nentuin siapa yang boleh nambah akses)
@@ -83,6 +86,37 @@
   window.ntFirebaseSignOut = () => signOut(auth);
   getRedirectResult(auth).catch(explainAuthError);
 
+  // Tabel hadiah streak (hari beruntun -> jam akses): 1=1 jam, 2=2 jam, 3=3 jam, 4-13=4 jam,
+  // kelipatan 14 hari (2 minggu)=5 jam, sisanya dari hari ke-14=4 jam.
+  function hoursForStreak(streak) {
+    if (streak === 1) return 1;
+    if (streak === 2) return 2;
+    if (streak === 3) return 3;
+    if (streak % 14 === 0) return 5;
+    return 4;
+  }
+  window.ntHoursForStreak = hoursForStreak;
+
+  // Dipanggil dari tombol "Mulai Timer". Nyambung streak kalau kemarin masih aktif, putus (balik ke 1) kalau kelewat sehari+.
+  window.ntClaimTimer = async () => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Kamu belum login.');
+    const email = (user.email || '').toLowerCase();
+    const ref = doc(db, 'users', user.uid);
+    const snap = await getDoc(ref);
+    const data = snap.data() || {};
+    const today = Math.floor(Date.now() / ONE_DAY);
+    const lastClaimDay = Number(data.lastClaimDay ?? -1);
+    if (lastClaimDay === today) throw new Error('Timer hari ini udah kamu mulai.');
+    const streak = lastClaimDay === today - 1 ? Number(data.streak || 0) + 1 : 1;
+    const hours = hoursForStreak(streak);
+    const current = Number(data.accessUntil || 0);
+    const target = Date.now() + hours * ONE_HOUR;
+    const bumped = current > target ? current : target; // gak pernah ngurangin akses yg masih lebih lama
+    await setDoc(ref, { email, accessUntil: bumped, streak, lastClaimDay: today, updatedAt: serverTimestamp() }, { merge: true });
+    return { accessUntil: bumped, streak, hours };
+  };
+
   // Dipanggil dari form admin di script bawah. Nyari akun lewat email, lalu perpanjang accessUntil-nya.
   window.ntAdminGrant = async (targetEmail, hours) => {
     const email = String(targetEmail || '').trim().toLowerCase();
@@ -98,7 +132,7 @@
     return newUntil;
   };
 
-  // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun, akun yang klaim jatah hari ini.
+  // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun, akun yang mulai timer hari ini.
   window.ntAdminStats = async () => {
     const snaps = await getDocs(collection(db, 'users'));
     const now = Date.now(), today = Math.floor(now / ONE_DAY);
@@ -106,9 +140,28 @@
     snaps.forEach((s) => {
       const d = s.data();
       left += Math.max(0, Number(d.accessUntil || 0) - now);
-      if ((d.lastFreeGrantDay ?? -1) === today) todayCount++;
+      if (Number(d.lastClaimDay ?? -1) === today) todayCount++;
     });
     return { members: snaps.size, hours: Math.ceil(left / ONE_HOUR), today: todayCount };
+  };
+
+  // Daftar semua akun buat panel admin: email tiap akun yang pernah login + streak efektifnya (0 kalau udah putus).
+  window.ntAdminListUsers = async () => {
+    const snaps = await getDocs(collection(db, 'users'));
+    const now = Date.now(), today = Math.floor(now / ONE_DAY);
+    const list = [];
+    snaps.forEach((s) => {
+      const d = s.data();
+      const lastClaimDay = Number(d.lastClaimDay ?? -1);
+      const alive = lastClaimDay === today || lastClaimDay === today - 1;
+      list.push({
+        email: d.email || '(tanpa email)',
+        streak: alive ? Number(d.streak || 0) : 0,
+        remainMs: Math.max(0, Number(d.accessUntil || 0) - now)
+      });
+    });
+    list.sort((a, b) => b.streak - a.streak || b.remainMs - a.remainMs);
+    return list;
   };
 
   let unsubscribe = null;
@@ -124,25 +177,23 @@
     try {
       const snap = await getDoc(ref);
       if (!snap.exists()) {
-        await setDoc(ref, { email, accessUntil: 0, lastFreeGrantDay: -1, updatedAt: serverTimestamp() });
-      }
-      // Kasih jatah 1 jam gratis kalau hari ini belum pernah diklaim
-      const fresh = await getDoc(ref);
-      const data = fresh.data() || {};
-      const today = Math.floor(Date.now() / ONE_DAY);
-      if ((data.lastFreeGrantDay ?? -1) < today) {
-        const current = Number(data.accessUntil || 0);
-        const target = Date.now() + ONE_HOUR;
-        const bumped = current > target ? current : target; // gak pernah ngurangin akses admin yg masih lama
-        await setDoc(ref, { email, accessUntil: bumped, lastFreeGrantDay: today, updatedAt: serverTimestamp() }, { merge: true });
+        await setDoc(ref, { email, accessUntil: 0, streak: 0, lastClaimDay: -1, updatedAt: serverTimestamp() });
       }
     } catch (err) {
-      console.error('[Node Tools] Sinkronisasi akses gagal:', err);
+      console.error('[Node Tools] Sinkronisasi akun gagal:', err);
     }
 
     unsubscribe = onSnapshot(ref, (snap) => {
       const d = snap.data() || {};
-      window.ntOnAuth && window.ntOnAuth({ uid: user.uid, email, isAdmin, accessUntil: Number(d.accessUntil || 0), claimedToday: Number(d.lastFreeGrantDay ?? -1) === Math.floor(Date.now() / ONE_DAY) });
+      const today = Math.floor(Date.now() / ONE_DAY);
+      const lastClaimDay = Number(d.lastClaimDay ?? -1);
+      const alive = lastClaimDay === today || lastClaimDay === today - 1;
+      window.ntOnAuth && window.ntOnAuth({
+        uid: user.uid, email, isAdmin,
+        accessUntil: Number(d.accessUntil || 0),
+        streak: alive ? Number(d.streak || 0) : 0,
+        claimedToday: lastClaimDay === today
+      });
     }, (err) => { console.error('[Node Tools] Listener akses gagal:', err); window.ntOnAuthError && window.ntOnAuthError(err); });
   });
 </script>
@@ -275,6 +326,14 @@ dialog#adminPanel input{display:block;width:100%;margin-top:.4rem;padding:.6rem 
 dialog#adminPanel .row{display:flex;align-items:center;gap:1.1rem;margin-top:.4rem}
 dialog#adminPanel .row .gate-btn{width:auto;flex:1}
 
+a.gate-btn{text-decoration:none}
+.admin-sub{margin:1.3rem 0 .6rem;padding-top:1.1rem;border-top:2px solid var(--line);font:800 .85rem var(--sans)}
+.user-list{max-height:190px;overflow-y:auto;border:3px solid var(--ink);background:#fff;font-size:.72rem}
+.ul-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.ul-row:last-child{border-bottom:0}
+.ul-mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ul-streak{flex:none;font-weight:800}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -330,13 +389,26 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
     </div>
   </section>
 
+  <section id="screen-start" class="gate-wrap" hidden>
+    <div class="gate">
+      <div class="gate-top"><span class="ph" aria-hidden="true">⏱️</span></div>
+      <div class="gate-body">
+        <h2>Mulai Timer Harian</h2>
+        <p>Streak beruntun kamu: <b id="startStreak">0</b> hari. Mulai timer sekarang buat dapat <b id="startHours">1</b> jam akses hari ini.</p>
+        <button id="startTimerBtn" class="gate-btn" type="button">Mulai Timer</button>
+        <p id="startMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
+      </div>
+    </div>
+  </section>
+
   <section id="screen-noaccess" class="gate-wrap" hidden>
     <div class="gate">
       <div class="gate-top"><span class="ph" aria-hidden="true">⏳</span></div>
       <div class="gate-body">
         <h2>Akses harian abis</h2>
-        <p>Jatah akses gratis kamu hari ini udah kepake semua. Balik lagi besok buat dapat 1 jam baru, atau hubungi admin buat tambahan akses.</p>
-        <button id="logoutBtnNoAccess" class="link-btn" type="button">Keluar</button>
+        <p>Jatah jam hari ini udah kepake semua. Balik lagi besok buat lanjutin streak, atau minta tambahan waktu ke admin.</p>
+        <a id="waBtnNoAccess" class="gate-btn" target="_blank" rel="noopener" href="#">Minta Tambahan Waktu</a>
+        <div style="margin-top:1rem"><button id="logoutBtnNoAccess" class="link-btn" type="button">Keluar</button></div>
       </div>
     </div>
   </section>
@@ -374,11 +446,14 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
       <h2 class="panel-h"><svg class="ic"><use href="#i-user"/></svg>Akun Member</h2>
       <ul class="rows">
         <li><svg class="ic"><use href="#i-clock"/></svg><span>Akses Jam Tersedia</span><b class="js-remain">60:00</b></li>
+        <li><span class="ic" aria-hidden="true" style="display:grid;place-items:center;font-size:1.1rem">🔥</span><span>Streak Beruntun</span><b id="memberStreak">0</b></li>
         <li><svg class="ic"><use href="#i-cal"/></svg><span>Akses Hari Ini</span><b id="todayN">1</b></li>
       </ul>
       <p class="note"><svg class="ic"><use href="#i-info"/></svg>Akses jam akan otomatis berkurang setelah digunakan.</p>
+      <p style="margin:0 1.1rem 1.1rem;font-size:.75rem"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA) →</a></p>
     </section>
 
+    <button id="claimBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-clock"/></svg><span>Mulai Timer Harian</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="addBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses Jam</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="allBtn" class="act" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Lihat Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
   </section>
@@ -422,6 +497,8 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
         <button type="submit" class="gate-btn">Tambah akses</button>
         <button type="button" id="adminClose" class="link-btn">Tutup</button>
       </div>
+      <h3 class="admin-sub">Daftar Member (email &amp; streak)</h3>
+      <div id="adminUserList" class="user-list">Memuat...</div>
     </div>
   </form>
 </dialog>
@@ -534,13 +611,15 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
 
   // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
   const $ = id => document.getElementById(id);
-  const screens = { checking: $('screen-checking'), login: $('screen-login'), noaccess: $('screen-noaccess'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
+  const screens = { checking: $('screen-checking'), login: $('screen-login'), start: $('screen-start'), noaccess: $('screen-noaccess'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
   const menuWrap = $('menuWrap'), menuBtn = $('menuBtn'), menu = $('menu');
   const adminPanel = $('adminPanel'), adminForm = $('adminForm'), adminMsg = $('adminMsg');
   const adminEmailInput = $('adminEmail'), adminHoursInput = $('adminHours');
+  const startTimerBtn = $('startTimerBtn'), startMsg = $('startMsg');
+  const WA_NUMBER = '6285648916476';
 
   let countdownTimer = null, authResolved = false, statsLoaded = false;
-  let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,accessUntil}
+  let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,accessUntil,streak,claimedToday}
   let view = 'home';      // 'home' | 'tools'
 
   function closeMenu() { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
@@ -586,6 +665,26 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
     });
   }
 
+  // Daftar email + streak semua member, dipanggil tiap kali dialog admin dibuka (dan sehabis kasih akses baru).
+  function loadAdminUserList() {
+    const box = $('adminUserList');
+    if (!box || !window.ntAdminListUsers) return;
+    box.textContent = 'Memuat...';
+    window.ntAdminListUsers().then(list => {
+      if (!list.length) { box.textContent = 'Belum ada member.'; return; }
+      box.innerHTML = '';
+      list.forEach(u => {
+        const row = el('div', 'ul-row');
+        row.append(el('span', 'ul-mail', u.email));
+        row.append(el('span', 'ul-streak', '🔥 ' + u.streak));
+        box.append(row);
+      });
+    }).catch(err => {
+      console.error('[Node Tools] Gagal memuat daftar member:', err);
+      box.textContent = 'Gagal memuat daftar member.';
+    });
+  }
+
   function paintHome() {
     const ad = currentAuth.isAdmin;
     const badge = $('badge');
@@ -594,16 +693,40 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
     $('homeDesc').textContent = ad ? 'Kelola akses dan nikmati semua fitur yang tersedia.' : 'Nikmati akses tools dengan mudah dan cepat.';
     $('panelAdmin').hidden = !ad;
     $('panelMember').hidden = ad;
+    $('claimBtn').hidden = ad || currentAuth.claimedToday;
     $('addBtn').hidden = !ad;
     $('menuAdd').hidden = !ad;
     $('menuMail').textContent = currentAuth.email;
     $('todayN').textContent = currentAuth.claimedToday ? 1 : 0;
+    $('memberStreak').textContent = currentAuth.streak;
+  }
+
+  // Isi teks layar "Mulai Timer": streak yang udah jalan + proyeksi jam yang bakal didapat kalau lanjut hari ini.
+  function paintStart() {
+    const nextDay = currentAuth.streak > 0 ? currentAuth.streak + 1 : 1;
+    const hours = window.ntHoursForStreak ? window.ntHoursForStreak(nextDay) : 1;
+    $('startStreak').textContent = currentAuth.streak;
+    $('startHours').textContent = hours;
+  }
+
+  // Isi link WA (noaccess + panel member) dengan pesan siap kirim, termasuk email akun yang lagi login.
+  function updateWaLinks() {
+    const msg = 'Halo Admin Node Tools, saya mau minta tambahan waktu akses.\nEmail: ' + currentAuth.email + '\nSaya bisa bantu tugas atau bayar untuk tambahan waktu.';
+    const href = 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(msg);
+    const a1 = $('waBtnNoAccess'), a2 = $('waBtnHome');
+    if (a1) a1.href = href;
+    if (a2) a2.href = href;
   }
 
   function render() {
     if (!authResolved) return showScreen('checking');
     if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
-    if (currentAuth.accessUntil <= Date.now()) { stopCountdown(); return showScreen('noaccess'); }
+    updateWaLinks();
+    if (currentAuth.accessUntil <= Date.now()) {
+      stopCountdown();
+      if (!currentAuth.claimedToday) { paintStart(); return showScreen('start'); }
+      return showScreen('noaccess');
+    }
     paintHome();
     showScreen(view);
     startCountdown();
@@ -612,8 +735,24 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
   }
 
   const signOutNow = () => window.ntFirebaseSignOut && window.ntFirebaseSignOut();
-  const openAdmin = () => { closeMenu(); adminMsg.hidden = true; adminForm.reset(); adminPanel.showModal(); };
+  const openAdmin = () => { closeMenu(); adminMsg.hidden = true; adminForm.reset(); adminPanel.showModal(); loadAdminUserList(); };
+
+  // Dipanggil tombol Mulai Timer (layar gate) & Mulai Timer Harian (beranda, kalau masih ada sisa akses tapi belum klaim hari ini).
+  // onSnapshot di script Firebase bakal update currentAuth & render ulang sendiri begitu klaim sukses.
+  async function claimTimer(btn, msgEl) {
+    btn.disabled = true;
+    if (msgEl) msgEl.hidden = true;
+    try {
+      await window.ntClaimTimer();
+    } catch (err) {
+      const text = (err && err.message) ? err.message : 'Gagal mulai timer.';
+      if (msgEl) { msgEl.textContent = text; msgEl.hidden = false; } else { alert(text); }
+      btn.disabled = false;
+    }
+  }
   $('loginBtn').addEventListener('click', () => window.ntFirebaseSignIn && window.ntFirebaseSignIn());
+  startTimerBtn.addEventListener('click', () => claimTimer(startTimerBtn, startMsg));
+  $('claimBtn').addEventListener('click', () => claimTimer($('claimBtn')));
   $('logoutBtnNoAccess').addEventListener('click', signOutNow);
   $('menuOut').addEventListener('click', signOutNow);
   $('allBtn').addEventListener('click', () => go('tools'));
@@ -641,6 +780,7 @@ dialog#adminPanel .row .gate-btn{width:auto;flex:1}
       adminMsg.textContent = 'Berhasil — akses aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
       adminMsg.hidden = false;
       loadStats(true);
+      loadAdminUserList();
     } catch (err) {
       adminMsg.textContent = (err && err.message) ? err.message : 'Gagal kasih akses.';
       adminMsg.hidden = false;
