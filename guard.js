@@ -1,56 +1,45 @@
-// guard.js — Node Tools access guard.
-// Taruh <script src="../guard.js"></script> PALING ATAS <head>, sebelum tag/skrip lain, di SETIAP file tools/*.html.
-// Cek: udah login Google + masih punya akses aktif (Firestore). Kalau enggak, halaman disembunyikan lalu dilempar balik ke index.html.
-(function () {
+// guard.js — WAJIB ditaruh PALING ATAS <head>, sebelum tag/script lain, di SETIAP tools/<slug>.html:
+//   <script src="../guard.js"></script>
+//
+// Tugasnya: ngecek user udah login Google + masih punya sisa akses (timer gratis ATAU timer tambahan
+// admin, atau akun admin) SEBELUM konten tool kebuka. Kalau enggak, halaman langsung dilempar balik ke
+// index.html (biar user ketemu layar login/mulai-timer/akses-abis di sana) tanpa sempat lihat isi tool.
+//
+// firebaseConfig di bawah ini HARUS SAMA PERSIS dengan firebaseConfig di index.html. Kalau kamu ganti
+// project Firebase, update di DUA tempat itu.
+(() => {
   'use strict';
-  document.documentElement.style.visibility = 'hidden';
 
-  // GANTI dengan config Firebase project kamu — HARUS SAMA PERSIS dengan yang di index.html
-  var firebaseConfig = {
-    apiKey: "GANTI_DENGAN_API_KEY",
-    authDomain: "GANTI.firebaseapp.com",
-    projectId: "GANTI_PROJECT_ID",
-    storageBucket: "GANTI.firebasestorage.app",
-    messagingSenderId: "GANTI_SENDER_ID",
-    appId: "GANTI_APP_ID"
+  // Sembunyiin seluruh halaman dulu sampai status akses jelas, biar konten tool gak sempat kelihatan
+  // (walau cuma sekilas) sebelum ketauan boleh diakses apa nggak.
+  const hideStyle = document.createElement('style');
+  hideStyle.textContent = 'html{visibility:hidden!important}';
+  document.head.appendChild(hideStyle);
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyD6H9BVv-8lMi-YM7i69cjattWzMBHfHkg",
+    authDomain: "node-tools-ctfy.firebaseapp.com",
+    projectId: "node-tools-ctfy",
+    storageBucket: "node-tools-ctfy.firebasestorage.app",
+    messagingSenderId: "1065352327411",
+    appId: "1:1065352327411:web:904f269ddfaf86edb7c786"
   };
+  const ADMIN_EMAILS = ['myxrin2748@gmail.com', 'namskyfr@gmail.com'];
+  const HOME_URL = '../index.html'; // lokasi index.html relatif dari tools/<slug>.html -- ubah kalau struktur folder beda
 
-  function bounce() {
-    location.replace('../index.html');
-  }
+  let settled = false;
+  const reveal = () => { if (!settled) { settled = true; hideStyle.remove(); } };
+  const deny = () => { if (!settled) { settled = true; location.replace(HOME_URL); } };
 
-  Promise.all([
-    import('https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js'),
-    import('https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js'),
-    import('https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js')
-  ]).then(function (mods) {
-    var initializeApp = mods[0].initializeApp;
-    var getAuth = mods[1].getAuth;
-    var onAuthStateChanged = mods[1].onAuthStateChanged;
-    var getFirestore = mods[2].getFirestore;
-    var doc = mods[2].doc;
-    var getDoc = mods[2].getDoc;
+  // Kalau Firebase lemot/gak respons, jangan nyangkut nutup selama-lamanya -- lempar balik ke home.
+  const failsafe = setTimeout(deny, 12000);
 
-    var app = initializeApp(firebaseConfig);
-    var auth = getAuth(app);
-    var db = getFirestore(app);
+  (async () => {
+    try {
+      const [{ initializeApp }, authMod, fsMod] = await Promise.all([
+        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js'),
+        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js'),
+        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js')
+      ]);
 
-    onAuthStateChanged(auth, function (user) {
-      if (!user) { bounce(); return; }
-      getDoc(doc(db, 'users', user.uid)).then(function (snap) {
-        var accessUntil = snap.exists() ? Number(snap.data().accessUntil || 0) : 0;
-        if (accessUntil > Date.now()) {
-          document.documentElement.style.visibility = 'visible';
-        } else {
-          bounce();
-        }
-      }).catch(function (err) {
-        console.error('[Node Tools] Guard: gagal cek akses', err);
-        bounce();
-      });
-    });
-  }).catch(function (err) {
-    console.error('[Node Tools] Guard: gagal load Firebase', err);
-    bounce();
-  });
-})();
+      const app = initializeApp(firebaseConfig);
