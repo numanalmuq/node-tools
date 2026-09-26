@@ -22,15 +22,21 @@
   3. Deploy firestore.rules (file terpisah yang aku buatin) -> tempel di Firestore Console > Rules lalu Publish,
      atau lewat CLI: firebase deploy --only firestore:rules
      WAJIB dilakukan -- tanpa rules ini siapa pun bisa kasih diri sendiri akses tak terbatas lewat browser console.
-     PENTING: field akses harian sekarang "streak" + "lastClaimDay" (dulu "lastFreeGrantDay"), dan jam yang
-     ditambahin per klaim variatif 1-5 jam (dulu selalu 1 jam) -- kalau firestore.rules kamu masih validasi
-     nama field lama atau kenaikan accessUntil yang di-hardcode 1 jam, klaim bakal ditolak rules. Cek & update rules-nya.
+     PENTING: field "accessUntil" udah gak dipakai lagi, diganti 2 field kepisah (biar timer gratis & timer
+     tambahan admin gak ketuker):
+     - "freeUntil": timer gratis harian (dari streak), di-set sendiri oleh user lewat ntClaimTimer. Rules WAJIB
+       mastiin nilainya gak pernah lewat dari akhir hari itu -- ini yang bikin sisa jam gratis yang gak kepake
+       hangus pas ganti hari, gak nyambung ke besok.
+     - "bonusUntil": timer tambahan dari admin lewat ntAdminGrant. Rules WAJIB mastiin cuma isAdmin() yang boleh
+       nulis field ini. Beda sama freeUntil, bonusUntil gak ada batas hari (boleh numpuk dari nilai lama).
+     Kalau firestore.rules kamu masih validasi field "accessUntil" yang lama, klaim/tambah akses bakal ditolak
+     rules -- atau lebih parah, jadi celah keamanan kalau validasinya gak ikut diupdate. Cek & update rules-nya.
   4. Email admin ada di 2 tempat, kalau mau ganti/nambah HARUS diubah di keduanya biar konsisten:
      - ADMIN_EMAILS di script bawah (cuma buat nampilin tombol Admin)
      - fungsi isAdmin() di firestore.rules (ini yang beneran nentuin siapa yang boleh nambah akses)
 -->
 
-<!-- ===== Firebase: Auth (Google only) + Firestore (akses 1 jam/hari + jalur admin) ===== -->
+<!-- ===== Firebase: Auth (Google only) + Firestore (timer gratis harian + timer tambahan admin, kepisah) ===== -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js";
   import {
@@ -98,6 +104,8 @@
   window.ntHoursForStreak = hoursForStreak;
 
   // Dipanggil dari tombol "Mulai Timer". Nyambung streak kalau kemarin masih aktif, putus (balik ke 1) kalau kelewat sehari+.
+  // freeUntil kepisah dari bonusUntil dan SELALU dipotong di akhir hari -- sisa jam gratis yg gak kepake gak
+  // pernah nyambung ke besok. Kalau hari ini belum ditekan "Mulai Timer", freeUntil otomatis udah lewat (hangus).
   window.ntClaimTimer = async () => {
     const user = auth.currentUser;
     if (!user) throw new Error('Kamu belum login.');
@@ -105,19 +113,20 @@
     const ref = doc(db, 'users', user.uid);
     const snap = await getDoc(ref);
     const data = snap.data() || {};
-    const today = Math.floor(Date.now() / ONE_DAY);
+    const now = Date.now();
+    const today = Math.floor(now / ONE_DAY);
     const lastClaimDay = Number(data.lastClaimDay ?? -1);
     if (lastClaimDay === today) throw new Error('Timer hari ini udah kamu mulai.');
     const streak = lastClaimDay === today - 1 ? Number(data.streak || 0) + 1 : 1;
     const hours = hoursForStreak(streak);
-    const current = Number(data.accessUntil || 0);
-    const target = Date.now() + hours * ONE_HOUR;
-    const bumped = current > target ? current : target; // gak pernah ngurangin akses yg masih lebih lama
-    await setDoc(ref, { email, accessUntil: bumped, streak, lastClaimDay: today, updatedAt: serverTimestamp() }, { merge: true });
-    return { accessUntil: bumped, streak, hours };
+    const endOfToday = (today + 1) * ONE_DAY; // batas keras: freeUntil gak pernah lewat tengah malam
+    const freeUntil = Math.min(now + hours * ONE_HOUR, endOfToday);
+    await setDoc(ref, { email, freeUntil, streak, lastClaimDay: today, updatedAt: serverTimestamp() }, { merge: true });
+    return { freeUntil, streak, hours };
   };
 
-  // Dipanggil dari form admin di script bawah. Nyari akun lewat email, lalu perpanjang accessUntil-nya.
+  // Dipanggil dari form admin di script bawah. Nyari akun lewat email, lalu perpanjang bonusUntil-nya --
+  // kepisah dari timer gratis (freeUntil), numpuk dari nilai lama, dan gak ikut hangus tiap ganti hari.
   window.ntAdminGrant = async (targetEmail, hours) => {
     const email = String(targetEmail || '').trim().toLowerCase();
     const h = Number(hours);
@@ -126,20 +135,21 @@
     const snaps = await getDocs(query(collection(db, 'users'), where('email', '==', email)));
     if (snaps.empty) throw new Error('Akun ini belum pernah login ke Node Tools.');
     const targetRef = snaps.docs[0].ref;
-    const current = Number(snaps.docs[0].data().accessUntil || 0);
+    const current = Number(snaps.docs[0].data().bonusUntil || 0);
     const newUntil = Math.max(current, Date.now()) + h * ONE_HOUR;
-    await updateDoc(targetRef, { accessUntil: newUntil, updatedAt: serverTimestamp() });
+    await updateDoc(targetRef, { bonusUntil: newUntil, updatedAt: serverTimestamp() });
     return newUntil;
   };
 
-  // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun, akun yang mulai timer hari ini.
+  // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun (gratis + bonus), akun yang mulai timer hari ini.
   window.ntAdminStats = async () => {
     const snaps = await getDocs(collection(db, 'users'));
     const now = Date.now(), today = Math.floor(now / ONE_DAY);
     let left = 0, todayCount = 0;
     snaps.forEach((s) => {
       const d = s.data();
-      left += Math.max(0, Number(d.accessUntil || 0) - now);
+      const remain = Math.max(Number(d.freeUntil || 0), Number(d.bonusUntil || 0)) - now;
+      left += Math.max(0, remain);
       if (Number(d.lastClaimDay ?? -1) === today) todayCount++;
     });
     return { members: snaps.size, hours: Math.ceil(left / ONE_HOUR), today: todayCount };
@@ -157,7 +167,7 @@
       list.push({
         email: d.email || '(tanpa email)',
         streak: alive ? Number(d.streak || 0) : 0,
-        remainMs: Math.max(0, Number(d.accessUntil || 0) - now)
+        remainMs: Math.max(0, Math.max(Number(d.freeUntil || 0), Number(d.bonusUntil || 0)) - now)
       });
     });
     list.sort((a, b) => b.streak - a.streak || b.remainMs - a.remainMs);
@@ -177,7 +187,7 @@
     try {
       const snap = await getDoc(ref);
       if (!snap.exists()) {
-        await setDoc(ref, { email, accessUntil: 0, streak: 0, lastClaimDay: -1, updatedAt: serverTimestamp() });
+        await setDoc(ref, { email, freeUntil: 0, bonusUntil: 0, streak: 0, lastClaimDay: -1, updatedAt: serverTimestamp() });
       }
     } catch (err) {
       console.error('[Node Tools] Sinkronisasi akun gagal:', err);
@@ -188,9 +198,12 @@
       const today = Math.floor(Date.now() / ONE_DAY);
       const lastClaimDay = Number(d.lastClaimDay ?? -1);
       const alive = lastClaimDay === today || lastClaimDay === today - 1;
+      const freeUntil = Number(d.freeUntil || 0);
+      const bonusUntil = Number(d.bonusUntil || 0);
       window.ntOnAuth && window.ntOnAuth({
         uid: user.uid, email, isAdmin,
-        accessUntil: Number(d.accessUntil || 0),
+        freeUntil, bonusUntil,
+        accessUntil: Math.max(freeUntil, bonusUntil), // dipakai buat gating layar: aktif kalau salah satu masih nyala
         streak: alive ? Number(d.streak || 0) : 0,
         claimedToday: lastClaimDay === today
       });
@@ -249,8 +262,8 @@ h1{position:relative;margin:0;font:900 clamp(1.9rem,9.4vw,3.3rem)/1.02 var(--san
 .act:active{--s:2px;transform:translate(4px,4px);box-shadow:2px 2px 0 var(--ink)}
 
 /* Sudut terpotong: clip-path memuat area bayangan, garis miring digambar ::after */
-.badge,.panel,.act,.iconbtn{--c:12px;--s:6px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
-.badge::after,.panel::after,.act::after,.iconbtn::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
+.badge,.panel,.act,.iconbtn,.gate-icon{--c:12px;--s:6px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
+.badge::after,.panel::after,.act::after,.iconbtn::after,.gate-icon::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
 .badge{--c:9px;--s:4px}
 .panel{--c:14px;--s:8px}
 .iconbtn{--s:4px;clip-path:polygon(var(--c) 0,100% 0,100% var(--s),calc(100% + var(--s)) var(--s),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)),0 var(--c))}
@@ -282,7 +295,8 @@ h1{position:relative;margin:0;font:900 clamp(1.9rem,9.4vw,3.3rem)/1.02 var(--san
 .body{display:flex;flex:1;flex-direction:column;gap:.8rem;padding:1.1rem}
 .body h2{margin:0;font:900 1.3rem/1.1 var(--sans);letter-spacing:-.02em;overflow-wrap:anywhere}
 .body p{margin:0;flex:1;font-size:.88rem;overflow-wrap:anywhere}
-.btn{display:block;margin-top:auto;padding:.8rem 1rem;background:var(--c);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font:800 1rem var(--sans);text-align:center;text-decoration:none}
+.btn{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:auto;padding:.8rem 1rem;background:var(--c);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font:800 1rem var(--sans);text-decoration:none}
+.btn .ic{width:1.05rem;height:1.05rem}
 .btn::after{content:"";position:absolute;inset:0}
 .btn:focus-visible{outline:0}
 .btn:focus-visible::after{outline:4px dashed var(--ink);outline-offset:6px}
@@ -302,9 +316,11 @@ h1{position:relative;margin:0;font:900 clamp(1.9rem,9.4vw,3.3rem)/1.02 var(--san
 .gate-wrap{display:flex;justify-content:center;padding:clamp(1.25rem,6vw,3rem) 0}
 .gate{width:100%;max-width:400px;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);overflow:hidden}
 .gate-top{display:grid;place-items:center;padding:2rem 1rem;border-bottom:3px solid var(--ink)}
-#screen-login .gate-top{background:var(--yellow)}
+#screen-login .gate-top,#screen-start .gate-top{background:var(--yellow)}
 #screen-noaccess .gate-top{background:var(--blue)}
 #screen-error .gate-top{background:var(--red)}
+.gate-icon{display:grid;place-items:center;width:4.5rem;height:4.5rem;background:#fff}
+.gate-icon .ic{width:2.1rem;height:2.1rem}
 .gate-body{padding:1.6rem clamp(1.2rem,4vw,1.8rem)}
 .gate-body h2{margin:0 0 .6rem;font:900 1.5rem/1.1 var(--sans);letter-spacing:-.02em}
 .gate-body p{margin:0 0 1.4rem;font-size:.92rem}
@@ -313,7 +329,8 @@ h1{position:relative;margin:0;font:900 clamp(1.9rem,9.4vw,3.3rem)/1.02 var(--san
 .gate-btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
 .gate-btn:disabled{opacity:.55;cursor:progress}
 .gate-msg{margin-top:1rem;padding:.6rem .8rem;background:var(--red);border:2px solid var(--ink);font-weight:700;font-size:.85rem}
-.link-btn{background:none;border:0;padding:0;color:var(--ink);font:800 .92rem var(--sans);text-decoration:underline;cursor:pointer}
+.link-btn{display:inline-flex;align-items:center;gap:.35rem;background:none;border:0;padding:0;color:var(--ink);font:800 .92rem var(--sans);text-decoration:underline;cursor:pointer}
+.link-btn .ic{width:.85rem;height:.85rem}
 
 /* Dialog admin */
 dialog#adminPanel{max-width:380px;width:88vw;padding:0;overflow:hidden;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);font-family:var(--mono);color:var(--ink)}
@@ -332,7 +349,8 @@ a.gate-btn{text-decoration:none}
 .ul-row{display:flex;align-items:center;gap:.6rem;padding:.5rem .6rem;border-bottom:2px solid var(--line)}
 .ul-row:last-child{border-bottom:0}
 .ul-mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ul-streak{flex:none;font-weight:800}
+.ul-streak{flex:none;display:inline-flex;align-items:center;gap:.3rem;font-weight:800}
+.ul-streak .ic{width:1rem;height:1rem}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -350,6 +368,10 @@ a.gate-btn{text-decoration:none}
   <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5l-6 6 3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+  <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M6 3l6 9-6 9M18 3l-6 9 6 9"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 9.5v5"/><circle cx="12" cy="17.2" r="1.1" fill="currentColor"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2Q18 7 17 13Q17 19 12 21Q7 19 7 13Q6 7 12 2Z"/></symbol>
 </defs></svg>
 
 <div class="wrap top">
@@ -377,7 +399,7 @@ a.gate-btn{text-decoration:none}
 
   <section id="screen-login" class="gate-wrap" hidden>
     <div class="gate">
-      <div class="gate-top"><span class="ph" aria-hidden="true">🔒</span></div>
+      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-lock"/></svg></span></div>
       <div class="gate-body">
         <h2>Masuk dulu</h2>
         <p>Login pakai akun Google buat mulai pakai tools. Cuma bisa pakai Google, gak ada mode tamu.</p>
@@ -391,7 +413,7 @@ a.gate-btn{text-decoration:none}
 
   <section id="screen-start" class="gate-wrap" hidden>
     <div class="gate">
-      <div class="gate-top"><span class="ph" aria-hidden="true">⏱️</span></div>
+      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-clock"/></svg></span></div>
       <div class="gate-body">
         <h2>Mulai Timer Harian</h2>
         <p>Streak beruntun kamu: <b id="startStreak">0</b> hari. Mulai timer sekarang buat dapat <b id="startHours">1</b> jam akses hari ini.</p>
@@ -403,7 +425,7 @@ a.gate-btn{text-decoration:none}
 
   <section id="screen-noaccess" class="gate-wrap" hidden>
     <div class="gate">
-      <div class="gate-top"><span class="ph" aria-hidden="true">⏳</span></div>
+      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-hourglass"/></svg></span></div>
       <div class="gate-body">
         <h2>Akses harian abis</h2>
         <p>Jatah jam hari ini udah kepake semua. Balik lagi besok buat lanjutin streak, atau minta tambahan waktu ke admin.</p>
@@ -415,7 +437,7 @@ a.gate-btn{text-decoration:none}
 
   <section id="screen-error" class="gate-wrap" hidden>
     <div class="gate">
-      <div class="gate-top"><span class="ph" aria-hidden="true">⚠️</span></div>
+      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-warn"/></svg></span></div>
       <div class="gate-body">
         <h2>Gagal memuat</h2>
         <p id="errMsg">Ada masalah koneksi. Coba lagi ya.</p>
@@ -445,12 +467,13 @@ a.gate-btn{text-decoration:none}
     <section id="panelMember" class="panel" hidden>
       <h2 class="panel-h"><svg class="ic"><use href="#i-user"/></svg>Akun Member</h2>
       <ul class="rows">
-        <li><svg class="ic"><use href="#i-clock"/></svg><span>Akses Jam Tersedia</span><b class="js-remain">60:00</b></li>
-        <li><span class="ic" aria-hidden="true" style="display:grid;place-items:center;font-size:1.1rem">🔥</span><span>Streak Beruntun</span><b id="memberStreak">0</b></li>
+        <li><svg class="ic"><use href="#i-clock"/></svg><span>Timer Gratis</span><b class="js-remain-free">0:00</b></li>
+        <li><svg class="ic"><use href="#i-plus"/></svg><span>Timer Tambahan Admin</span><b class="js-remain-bonus">0:00</b></li>
+        <li><svg class="ic"><use href="#i-flame"/></svg><span>Streak Beruntun</span><b id="memberStreak">0</b></li>
         <li><svg class="ic"><use href="#i-cal"/></svg><span>Akses Hari Ini</span><b id="todayN">1</b></li>
       </ul>
-      <p class="note"><svg class="ic"><use href="#i-info"/></svg>Akses jam akan otomatis berkurang setelah digunakan.</p>
-      <p style="margin:0 1.1rem 1.1rem;font-size:.75rem"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA) →</a></p>
+      <p class="note"><svg class="ic"><use href="#i-info"/></svg>Timer gratis bakal hangus kalau belum abis dipakai hari itu juga. Timer tambahan dari admin gak ikut hangus.</p>
+      <p style="margin:0 1.1rem 1.1rem;font-size:.75rem"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA)<svg class="ic"><use href="#i-arrow"/></svg></a></p>
     </section>
 
     <button id="claimBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-clock"/></svg><span>Mulai Timer Harian</span><svg class="ic"><use href="#i-arrow"/></svg></button>
@@ -462,7 +485,7 @@ a.gate-btn{text-decoration:none}
     <div class="bar">
       <button id="backBtn" class="iconbtn" type="button" aria-label="Kembali ke beranda"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
       <h2>Semua Tools</h2>
-      <span class="chip">Sisa <b class="js-remain">60:00</b></span>
+      <span id="remainChip" class="chip">Sisa <b class="js-remain">60:00</b></span>
     </div>
     <label class="search">
       <svg class="ic"><use href="#i-search"/></svg>
@@ -525,6 +548,18 @@ a.gate-btn{text-decoration:none}
     return n;
   };
 
+  // Bikin <svg class="…"><use href="#i-id"/></svg> lewat JS -- dipakai di tempat yg kontennya dirakit dinamis,
+  // biar gak ada yang kepaksa nulis emoji langsung di string (misal: tombol kartu tool, daftar member admin).
+  const SVG_NS = 'http://www.w3.org/2000/svg';
+  const svgUse = (id, cls) => {
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    if (cls) svg.setAttribute('class', cls);
+    const use = document.createElementNS(SVG_NS, 'use');
+    use.setAttribute('href', '#' + id);
+    svg.append(use);
+    return svg;
+  };
+
   const setState = (kind, msg) => {
     stateEl.className = 'state ' + kind;
     stateEl.textContent = msg;
@@ -551,7 +586,8 @@ a.gate-btn{text-decoration:none}
     const body = el('div', 'body');
     body.append(el('h2', null, t.name));
     if (t.desc) body.append(el('p', null, t.desc));
-    const btn = el('a', 'btn', 'Buka Tool →');
+    const btn = el('a', 'btn');
+    btn.append(document.createTextNode('Buka Tool'), svgUse('i-arrow', 'ic'));
     btn.href = t.href;
     btn.setAttribute('aria-label', 'Buka tool: ' + t.name);
     body.append(btn);
@@ -619,7 +655,7 @@ a.gate-btn{text-decoration:none}
   const WA_NUMBER = '6285648916476';
 
   let countdownTimer = null, authResolved = false, statsLoaded = false;
-  let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,accessUntil,streak,claimedToday}
+  let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,freeUntil,bonusUntil,accessUntil,streak,claimedToday}
   let view = 'home';      // 'home' | 'tools'
 
   function closeMenu() { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
@@ -639,12 +675,20 @@ a.gate-btn{text-decoration:none}
 
   function startCountdown() {
     stopCountdown();
-    const nodes = document.querySelectorAll('.js-remain');
+    const totalNodes = document.querySelectorAll('.js-remain');
+    const freeNodes = document.querySelectorAll('.js-remain-free');
+    const bonusNodes = document.querySelectorAll('.js-remain-bonus');
     const tick = () => {
       if (!currentAuth) return stopCountdown();
-      const remain = currentAuth.accessUntil - Date.now();
-      if (remain <= 0) { stopCountdown(); render(); return; }
-      nodes.forEach(n => { n.textContent = fmt(remain); });
+      const now = Date.now();
+      const freeRemain = currentAuth.freeUntil - now;
+      const bonusRemain = currentAuth.bonusUntil - now;
+      const totalRemain = Math.max(freeRemain, bonusRemain);
+      // Admin gak dibatasi timer sama sekali, jadi gak perlu auto-stop pas "habis"
+      if (!currentAuth.isAdmin && totalRemain <= 0) { stopCountdown(); render(); return; }
+      totalNodes.forEach(n => { n.textContent = fmt(Math.max(0, totalRemain)); });
+      freeNodes.forEach(n => { n.textContent = fmt(Math.max(0, freeRemain)); });
+      bonusNodes.forEach(n => { n.textContent = fmt(Math.max(0, bonusRemain)); });
     };
     tick();
     countdownTimer = setInterval(tick, 1000);
@@ -676,7 +720,9 @@ a.gate-btn{text-decoration:none}
       list.forEach(u => {
         const row = el('div', 'ul-row');
         row.append(el('span', 'ul-mail', u.email));
-        row.append(el('span', 'ul-streak', '🔥 ' + u.streak));
+        const streakEl = el('span', 'ul-streak');
+        streakEl.append(svgUse('i-flame', 'ic'), document.createTextNode(' ' + u.streak));
+        row.append(streakEl);
         box.append(row);
       });
     }).catch(err => {
@@ -699,6 +745,7 @@ a.gate-btn{text-decoration:none}
     $('menuMail').textContent = currentAuth.email;
     $('todayN').textContent = currentAuth.claimedToday ? 1 : 0;
     $('memberStreak').textContent = currentAuth.streak;
+    $('remainChip').hidden = ad;
   }
 
   // Isi teks layar "Mulai Timer": streak yang udah jalan + proyeksi jam yang bakal didapat kalau lanjut hari ini.
@@ -722,7 +769,7 @@ a.gate-btn{text-decoration:none}
     if (!authResolved) return showScreen('checking');
     if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
     updateWaLinks();
-    if (currentAuth.accessUntil <= Date.now()) {
+    if (!currentAuth.isAdmin && currentAuth.accessUntil <= Date.now()) {
       stopCountdown();
       if (!currentAuth.claimedToday) { paintStart(); return showScreen('start'); }
       return showScreen('noaccess');
@@ -777,7 +824,7 @@ a.gate-btn{text-decoration:none}
     adminMsg.hidden = true;
     try {
       const newUntil = await window.ntAdminGrant(adminEmailInput.value, adminHoursInput.value);
-      adminMsg.textContent = 'Berhasil — akses aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
+      adminMsg.textContent = 'Berhasil — timer tambahan aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
       adminMsg.hidden = false;
       loadStats(true);
       loadAdminUserList();
