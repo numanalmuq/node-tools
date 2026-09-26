@@ -1,1 +1,3670 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+<title>Jalur — SVG ke Alight Motion</title>
+<meta name="description" content="Ubah file SVG menjadi proyek Alight Motion (.xml) langsung dari peramban." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<style>
+  /* ============ Design tokens — Neo-Brutalism ============ */
+  :root{
+    --bg:#F6F3EA;
+    --paper:#FFFFFF;
+    --paper-sunken:#F0ECE0;
+    --ink:#0B0B0C;
+    --ink-soft:#46474C;
+    --line:#0B0B0C;
 
+    --blue:#2B4EFF;
+    --blue-dark:#1E39CC;
+    --yellow:#FFD400;
+    --yellow-soft:#FFF6CC;
+    --red:#CC2318;
+    --red-soft:#FFE0DD;
+    --green:#007A45;
+    --green-soft:#D7F5E7;
+
+    --anchor:var(--blue);
+    --handle:var(--ink);
+
+    --font-display:'Space Grotesk', system-ui, sans-serif;
+    --font-body:'Inter', system-ui, -apple-system, "Segoe UI", sans-serif;
+    --font-mono:'Space Mono', 'IBM Plex Mono', ui-monospace, "SFMono-Regular", monospace;
+
+    --border-w:3px;
+    --border-w-lg:4px;
+    --radius:10px;
+    --radius-sm:6px;
+    --radius-pill:999px;
+
+    --shadow-sm:4px 4px 0 var(--ink);
+    --shadow-md:6px 6px 0 var(--ink);
+    --shadow-lg:8px 8px 0 var(--ink);
+
+    --container:640px;
+    --pad:clamp(1rem, 4vw, 1.75rem);
+    --gap-sm:clamp(0.5rem, 1.5vw, 0.75rem);
+    --gap-md:clamp(0.875rem, 2.5vw, 1.25rem);
+    --gap-lg:clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+  html{ -webkit-text-size-adjust:100%; }
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:var(--font-body);
+    font-size:16px;
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  img,svg{ display:block; max-width:100%; }
+  button{ font:inherit; }
+  input,textarea,select{ font:inherit; color:inherit; }
+
+  :focus-visible{
+    outline:3px solid var(--blue);
+    outline-offset:2px;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:0.001ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.001ms !important;
+    }
+  }
+
+  .wrap{
+    max-width:var(--container);
+    margin:0 auto;
+    padding:0 var(--pad) calc(var(--pad) * 3);
+  }
+
+  /* ============ Header ============ */
+  header.top{
+    padding:clamp(1.5rem, 6vw, 2.25rem) var(--pad) 0.75rem;
+    max-width:var(--container);
+    margin:0 auto;
+  }
+  .brand{
+    display:flex;
+    align-items:center;
+    gap:0.75rem;
+  }
+  .brand-mark{ width:44px; height:36px; flex:none; }
+  .brand-name{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:2.125rem;
+    letter-spacing:-0.03em;
+    color:var(--ink);
+    display:inline-block;
+    padding:0 0.1em;
+    background:linear-gradient(transparent 62%, var(--yellow) 62%);
+  }
+  .tagline{
+    margin:0.75rem 0 0;
+    color:var(--ink-soft);
+    font-weight:500;
+    font-size:0.9375rem;
+    max-width:36ch;
+  }
+
+  /* Anchor-node drawing animation (fast, per brutalist motion rules) */
+  .brand-mark path.trace{
+    stroke-dasharray:120;
+    stroke-dashoffset:120;
+    animation:draw 480ms cubic-bezier(.65,0,.35,1) 80ms forwards;
+  }
+  .brand-mark .node{
+    opacity:0;
+    transform-origin:center;
+    animation:pop 260ms cubic-bezier(.34,1.56,.64,1) forwards;
+  }
+  .brand-mark .node.n1{ animation-delay:80ms; }
+  .brand-mark .node.n2{ animation-delay:300ms; }
+  .brand-mark .node.n3{ animation-delay:480ms; }
+  .brand-mark line.handle{
+    opacity:0;
+    animation:fadein 180ms ease-out 400ms forwards;
+  }
+  @keyframes draw{ to{ stroke-dashoffset:0; } }
+  @keyframes pop{ from{ opacity:0; transform:scale(0.4);} to{ opacity:1; transform:scale(1);} }
+  @keyframes fadein{ to{ opacity:1; } }
+
+  /* ============ Sections / cards ============ */
+  .stage{ margin-top:var(--gap-lg); }
+  .stage-head{
+    display:flex;
+    align-items:center;
+    gap:0.625rem;
+    margin-bottom:var(--gap-sm);
+  }
+  .stage-dot{
+    width:2.125rem; height:2.125rem;
+    border-radius:var(--radius-sm);
+    border:var(--border-w) solid var(--ink);
+    background:var(--paper);
+    display:flex; align-items:center; justify-content:center;
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:0.9375rem;
+    color:var(--ink);
+    flex:none;
+    box-shadow:3px 3px 0 var(--ink);
+    transition:transform 150ms, box-shadow 150ms, background 150ms, color 150ms;
+  }
+  .stage-dot.done{
+    background:var(--ink);
+    color:var(--paper);
+    transform:translate(3px, 3px);
+    box-shadow:none;
+  }
+  .stage-title{
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:1.1875rem;
+    letter-spacing:-0.01em;
+  }
+  .stage-sub{
+    margin:0.3125rem 0 0 2.75rem;
+    color:var(--ink-soft);
+    font-weight:500;
+    font-size:0.875rem;
+  }
+
+  .card{
+    background:var(--paper);
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius);
+    padding:var(--gap-md);
+    box-shadow:var(--shadow-md);
+  }
+
+  /* ============ Dropzone ============ */
+  .dropzone{
+    position:relative;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    border-radius:var(--radius-sm);
+    border:var(--border-w) dashed var(--ink);
+    background:var(--paper-sunken);
+    padding:clamp(1.75rem,7vw,2.5rem) 1.25rem;
+    text-align:center;
+    cursor:pointer;
+    transition:background 120ms, transform 100ms;
+  }
+  .dropzone:hover, .dropzone:focus-within{
+    background:var(--yellow-soft);
+  }
+  .dropzone.dragover{
+    background:var(--yellow);
+  }
+  .dropzone .corner{
+    position:absolute;
+    width:11px; height:11px;
+    border-radius:2px;
+    background:var(--ink);
+  }
+  .dropzone .corner.tl{ top:-5px; left:-5px; }
+  .dropzone .corner.tr{ top:-5px; right:-5px; }
+  .dropzone .corner.bl{ bottom:-5px; left:-5px; }
+  .dropzone .corner.br{ bottom:-5px; right:-5px; }
+  .dropzone-icon{ margin:0 auto 0.75rem; width:36px; height:36px; color:var(--ink); }
+  .dropzone-title{ font-family:var(--font-display); font-weight:700; font-size:1.0625rem; }
+  .dropzone-sub{ color:var(--ink-soft); font-weight:500; font-size:0.8125rem; margin-top:0.3125rem; }
+  .dropzone input[type=file]{
+    position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%;
+  }
+  .file-chip{
+    display:none;
+    align-items:center;
+    gap:0.5rem;
+    margin-top:0.75rem;
+    padding:0.5rem 0.75rem;
+    background:var(--paper);
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    font-size:0.8125rem;
+    font-family:var(--font-mono);
+    font-weight:700;
+    color:var(--ink);
+  }
+  .file-chip.show{ display:inline-flex; }
+  .file-chip button{
+    background:none; border:none; color:var(--ink); cursor:pointer;
+    padding:0; line-height:0; margin-left:0.25rem;
+  }
+  .file-chip button:hover{ color:var(--red); }
+
+  .paste-toggle{
+    display:inline-flex; align-items:center; gap:0.4375rem;
+    margin-top:0.875rem;
+    background:none; border:none;
+    color:var(--ink); font-size:0.8125rem; font-weight:700;
+    cursor:pointer; padding:0.75rem 0;
+    text-decoration:underline;
+    text-decoration-thickness:2.5px;
+    text-underline-offset:3px;
+    text-decoration-color:var(--yellow);
+  }
+  .paste-toggle:hover{ text-decoration-color:var(--ink); }
+  .paste-panel{ display:none; margin-top:0.625rem; }
+  .paste-panel.open{ display:block; }
+  .paste-panel textarea{
+    width:100%;
+    min-height:7.5rem;
+    resize:vertical;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.75rem;
+    font-family:var(--font-mono);
+    font-size:0.8125rem;
+    background:var(--paper);
+    color:var(--ink);
+  }
+  .paste-panel textarea:focus-visible{ outline-offset:0; }
+
+  /* ============ Preview ============ */
+  .preview-box{
+    border-radius:var(--radius-sm);
+    border:var(--border-w) solid var(--ink);
+    background-image:
+      linear-gradient(45deg, #E3E7EC 25%, transparent 25%),
+      linear-gradient(-45deg, #E3E7EC 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #E3E7EC 75%),
+      linear-gradient(-45deg, transparent 75%, #E3E7EC 75%);
+    background-size:16px 16px;
+    background-position:0 0, 0 8px, 8px -8px, -8px 0px;
+    background-color:#fafbfc;
+    display:flex; align-items:center; justify-content:center;
+    min-height:11rem;
+    max-height:16rem;
+    padding:1rem;
+    overflow:hidden;
+  }
+  .preview-box svg{ max-width:100%; max-height:14rem; width:auto; height:auto; }
+  .preview-empty{ color:var(--ink-soft); font-weight:600; font-size:0.8125rem; text-align:center; }
+
+  .meta-line{
+    display:flex; align-items:center; gap:0.5rem;
+    margin-top:0.875rem;
+    font-size:0.875rem;
+    color:var(--ink-soft);
+    font-weight:600;
+  }
+  .meta-line strong{
+    color:var(--paper);
+    background:var(--ink);
+    font-weight:700;
+    font-family:var(--font-mono);
+    padding:0.125rem 0.5rem;
+    border-radius:4px;
+  }
+
+  .warn-list{
+    list-style:none; margin:0.75rem 0 0; padding:0;
+    display:flex; flex-direction:column; gap:0.5rem;
+  }
+  .warn-list li{
+    display:flex; gap:0.5rem;
+    background:var(--yellow);
+    color:var(--ink);
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.5625rem 0.6875rem;
+    font-size:0.8125rem;
+    font-weight:600;
+    line-height:1.4;
+  }
+  .warn-list li svg{ flex:none; width:15px; height:15px; margin-top:0.1rem; }
+
+  .error-box{
+    background:var(--red);
+    color:#fff;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.6875rem 0.875rem;
+    font-size:0.8125rem;
+    font-weight:700;
+    margin-top:0.75rem;
+    box-shadow:var(--shadow-sm);
+  }
+
+  /* ============ Settings ============ */
+  .settings-summary{
+    display:flex; align-items:center; justify-content:space-between;
+    width:100%;
+    background:none; border:none; cursor:pointer;
+    padding:0; color:inherit; text-align:left;
+  }
+  .settings-summary .chev{ width:20px; height:20px; color:var(--ink); transition:transform 150ms; flex:none; }
+  .settings-summary[aria-expanded="true"] .chev{ transform:rotate(180deg); }
+  .settings-current{ font-size:0.8125rem; color:var(--ink-soft); font-weight:500; margin-top:0.1875rem; }
+
+  .settings-body{
+    display:none;
+    margin-top:var(--gap-md);
+    padding-top:var(--gap-md);
+    border-top:var(--border-w) solid var(--ink);
+  }
+  .settings-body.open{ display:block; }
+
+  .field{ margin-bottom:var(--gap-md); }
+  .field:last-child{ margin-bottom:0; }
+  .field-label{
+    display:block;
+    font-family:var(--font-display);
+    font-size:0.8125rem;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    margin-bottom:0.5rem;
+  }
+  .chips{ display:flex; flex-wrap:wrap; gap:0.5rem; }
+  .chip{
+    border:2px solid var(--ink);
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.6875rem 0.875rem;
+    font-size:0.8125rem;
+    font-weight:700;
+    cursor:pointer;
+    box-shadow:3px 3px 0 var(--ink);
+    transition:transform 120ms, box-shadow 120ms, background 120ms, color 120ms;
+  }
+  .chip:hover{ background:var(--yellow-soft); }
+  .chip[aria-pressed="true"]{
+    background:var(--blue);
+    border-color:var(--ink);
+    color:#fff;
+    transform:translate(3px, 3px);
+    box-shadow:none;
+  }
+  .subfield{ margin-top:0.625rem; display:none; }
+  .subfield.show{ display:flex; gap:0.625rem; align-items:center; flex-wrap:wrap; }
+  .num-input{
+    width:5.5rem;
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.5rem 0.625rem;
+    font-size:1rem; /* >=16px avoids iOS zoom-on-focus */
+    font-weight:700;
+    font-family:var(--font-mono);
+    background:var(--paper);
+  }
+  .num-input.small{ width:4.5rem; }
+  .num-input:focus-visible{ outline-offset:0; }
+  .field-row{ display:flex; align-items:center; gap:0.625rem; flex-wrap:wrap; }
+  .field-row .unit{ font-size:0.8125rem; color:var(--ink-soft); font-weight:700; }
+  .color-input{
+    width:2.75rem; height:2.75rem;
+    border-radius:var(--radius-sm);
+    border:2px solid var(--ink);
+    padding:2px;
+    background:var(--paper);
+    cursor:pointer;
+  }
+
+  /* ============ Buttons ============ */
+  .btn{
+    appearance:none;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-sm);
+    font-family:var(--font-display);
+    font-weight:700;
+    font-size:0.9375rem;
+    padding:0.875rem 1.5rem;
+    cursor:pointer;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:0.5rem;
+    transition:transform 120ms, box-shadow 120ms, background 150ms;
+  }
+  .btn:active{ transform:translate(4px, 4px) !important; box-shadow:none !important; }
+  .btn-primary{
+    background:var(--blue);
+    color:#fff;
+    width:100%;
+    box-shadow:var(--shadow-lg);
+  }
+  .btn-primary:hover{ background:var(--blue-dark); }
+  .btn-primary:disabled{
+    background:#E7E3D6;
+    color:#A6A093;
+    border-color:#A6A093;
+    box-shadow:none;
+    cursor:not-allowed;
+    transform:none !important;
+  }
+  .btn-secondary{
+    background:var(--paper);
+    color:var(--ink);
+    box-shadow:var(--shadow-md);
+  }
+  .btn-secondary:hover{ background:var(--yellow-soft); }
+  .btn-row{ display:flex; gap:0.75rem; margin-top:0.875rem; }
+  .btn-row .btn{ flex:1; box-shadow:var(--shadow-sm) !important; }
+
+  .convert-zone{
+    position:sticky;
+    bottom:0.75rem;
+    margin-top:var(--gap-lg);
+    z-index:5;
+  }
+  .convert-zone .hint{
+    text-align:center;
+    font-size:0.75rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:0.5rem 0 0;
+  }
+
+  /* ============ Output ============ */
+  .result-banner{
+    display:flex; align-items:center; gap:0.625rem;
+    background:var(--green);
+    color:#fff;
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.6875rem 0.8125rem;
+    font-size:0.875rem;
+    font-weight:700;
+    margin-bottom:var(--gap-sm);
+  }
+  .result-banner svg{ flex:none; width:19px; height:19px; }
+
+  .code-box{
+    background:var(--ink);
+    color:#EDEAE0;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.875rem;
+    font-family:var(--font-mono);
+    font-size:0.75rem;
+    line-height:1.6;
+    max-height:16rem;
+    overflow:auto;
+    white-space:pre;
+    box-shadow:var(--shadow-sm);
+  }
+  .code-box .tag{ color:#7FA6FF; }
+  .code-box .attr{ color:var(--yellow); }
+  .code-box .str{ color:#7FE8A6; }
+
+  .import-tip{
+    display:flex; gap:0.5rem;
+    margin-top:0.875rem;
+    font-size:0.8125rem;
+    font-weight:500;
+    color:var(--ink);
+    background:var(--yellow-soft);
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    padding:0.6875rem 0.8125rem;
+  }
+  .import-tip svg{ flex:none; width:17px; height:17px; margin-top:0.125rem; color:var(--ink); }
+  .import-tip strong{ color:var(--ink); font-weight:700; }
+
+  .toast{
+    position:fixed;
+    left:50%;
+    bottom:1.25rem;
+    transform:translate(-50%, 8px);
+    background:var(--ink);
+    color:#fff;
+    padding:0.6875rem 1.125rem;
+    border:2px solid var(--ink);
+    border-radius:var(--radius-sm);
+    font-size:0.8125rem;
+    font-weight:700;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 150ms, transform 150ms;
+    z-index:50;
+    box-shadow:var(--shadow-md);
+  }
+  .toast.show{ opacity:1; transform:translate(-50%, 0); }
+
+  footer.foot{
+    max-width:var(--container);
+    margin:0 auto;
+    padding:var(--gap-lg) var(--pad) var(--pad);
+    text-align:center;
+  }
+  footer.foot p{
+    font-size:0.75rem;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin:0;
+  }
+
+  @media (min-width:560px){
+    :root{ --pad:2rem; }
+    .btn-row .btn{ flex:none; padding-left:1.75rem; padding-right:1.75rem; }
+    .btn-row{ justify-content:flex-start; }
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">
+    <svg class="brand-mark" viewBox="0 0 40 32" fill="none" aria-hidden="true">
+      <path class="trace" d="M4 26 C 4 10, 14 6, 20 16 S 36 22, 36 8" stroke="var(--anchor)" stroke-width="2" stroke-linecap="round"/>
+      <line class="handle" x1="20" y1="16" x2="27" y2="10" stroke="var(--handle)" stroke-width="1.25"/>
+      <line class="handle" x1="20" y1="16" x2="13" y2="21" stroke="var(--handle)" stroke-width="1.25"/>
+      <circle class="node n2" cx="27" cy="10" r="2.5" fill="none" stroke="var(--handle)" stroke-width="1.25"/>
+      <circle class="node n2" cx="13" cy="21" r="2.5" fill="none" stroke="var(--handle)" stroke-width="1.25"/>
+      <circle class="node n1" cx="4" cy="26" r="3" fill="var(--anchor)"/>
+      <circle class="node n3" cx="36" cy="8" r="3" fill="var(--anchor)"/>
+      <circle class="node n2" cx="20" cy="16" r="3" fill="var(--anchor)"/>
+    </svg>
+    <span class="brand-name">Jalur</span>
+  </div>
+  <p class="tagline">SVG jadi proyek Alight Motion (.xml) — langsung dari peramban, tanpa unggah ke server.</p>
+</header>
+
+<div class="wrap">
+
+  <!-- ============ STAGE 1: INPUT ============ -->
+  <section class="stage" id="stageInput">
+    <div class="stage-head">
+      <span class="stage-dot" id="dotInput">1</span>
+      <span class="stage-title">Sumber SVG</span>
+    </div>
+    <p class="stage-sub">Unggah file SVG/gambar, atau tempel kode SVG.</p>
+
+    <div class="card">
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <span class="corner tl"></span><span class="corner tr"></span>
+        <span class="corner bl"></span><span class="corner br"></span>
+        <svg class="dropzone-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 15V4M12 4L7.5 8.5M12 4l4.5 4.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M4 16v2.5A1.5 1.5 0 0 0 5.5 20h13a1.5 1.5 0 0 0 1.5-1.5V16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div class="dropzone-title">Jatuhkan file SVG atau gambar di sini</div>
+        <div class="dropzone-sub">PNG/JPG otomatis diposterisasi jadi vektor · atau ketuk untuk pilih file</div>
+        <input type="file" id="fileInput" accept=".svg,image/svg+xml,.png,.jpg,.jpeg,.webp,.gif,.bmp,image/png,image/jpeg,image/webp,image/gif,image/bmp" />
+      </label>
+
+      <span class="file-chip" id="fileChip">
+        <span id="fileChipName">berkas.svg</span>
+        <button type="button" id="fileChipClear" aria-label="Hapus file">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3l8 8M11 3l-8 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </span>
+
+      <button type="button" class="paste-toggle" id="pasteToggle" aria-expanded="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 12h6M9 16h6M9 8h2M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Tempel kode SVG sebagai gantinya
+      </button>
+      <div class="paste-panel" id="pastePanel">
+        <textarea id="pasteArea" placeholder="&lt;svg xmlns=&quot;http://www.w3.org/2000/svg&quot; ...&gt;...&lt;/svg&gt;" spellcheck="false"></textarea>
+      </div>
+
+      <div class="error-box" id="parseError" style="display:none;"></div>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 2: PREVIEW ============ -->
+  <section class="stage" id="stagePreview" style="display:none;">
+    <div class="stage-head">
+      <span class="stage-dot" id="dotPreview">2</span>
+      <span class="stage-title">Pratinjau</span>
+    </div>
+    <p class="stage-sub">Bentuk yang akan dikonversi.</p>
+
+    <div class="card">
+      <div class="preview-box" id="previewBox">
+        <div class="preview-empty">Belum ada SVG</div>
+      </div>
+      <div class="meta-line" id="metaLine" style="display:none;">
+        <strong id="shapeCount">0</strong><span>bentuk terdeteksi</span>
+      </div>
+      <ul class="warn-list" id="warnList" style="display:none;"></ul>
+    </div>
+  </section>
+
+  <!-- ============ STAGE 3: SETTINGS ============ -->
+  <section class="stage" id="stageSettings" style="display:none;">
+    <div class="stage-head">
+      <span class="stage-dot" id="dotSettings">3</span>
+      <span class="stage-title">Pengaturan</span>
+    </div>
+
+    <div class="card">
+      <button type="button" class="settings-summary" id="settingsToggle" aria-expanded="true">
+        <span>
+          <span style="font-weight:600; font-size:0.9375rem;">Kanvas &amp; durasi</span>
+          <span class="settings-current" id="settingsCurrent">Ukuran asli SVG · transparan · 30fps · 3 detik</span>
+        </span>
+        <svg class="chev" viewBox="0 0 20 20" fill="none"><path d="M5 7.5l5 5 5-5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="settings-body open" id="settingsBody">
+
+        <div class="field">
+          <span class="field-label">Ukuran kanvas</span>
+          <div class="chips" id="canvasChips">
+            <button type="button" class="chip" data-canvas="native" aria-pressed="true">Ukuran asli SVG</button>
+            <button type="button" class="chip" data-canvas="square">Persegi 1080</button>
+            <button type="button" class="chip" data-canvas="story">Story 1080×1920</button>
+            <button type="button" class="chip" data-canvas="custom">Kustom</button>
+          </div>
+          <div class="subfield" id="customCanvasFields">
+            <input type="number" class="num-input small" id="customW" placeholder="Lebar" min="1" value="1080" />
+            <span class="unit">×</span>
+            <input type="number" class="num-input small" id="customH" placeholder="Tinggi" min="1" value="1080" />
+            <span class="unit">px</span>
+          </div>
+          <div class="subfield" id="fitModeFields">
+            <div class="chips">
+              <button type="button" class="chip" data-fit="contain" aria-pressed="true">Muat (jaga proporsi)</button>
+              <button type="button" class="chip" data-fit="stretch">Regangkan</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Latar belakang</span>
+          <div class="field-row">
+            <div class="chips" id="bgChips">
+              <button type="button" class="chip" data-bg="transparent" aria-pressed="true">Transparan</button>
+              <button type="button" class="chip" data-bg="color">Warna</button>
+            </div>
+            <input type="color" class="color-input" id="bgColor" value="#ffffff" style="display:none;" />
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Kecepatan bingkai</span>
+          <div class="chips" id="fpsChips">
+            <button type="button" class="chip" data-fps="30" aria-pressed="true">30 fps</button>
+            <button type="button" class="chip" data-fps="60">60 fps</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Durasi</span>
+          <div class="field-row">
+            <input type="number" class="num-input" id="durationInput" min="0.1" step="0.1" value="3" />
+            <span class="unit">detik</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONVERT CTA ============ -->
+  <div class="convert-zone" id="convertZone" style="display:none;">
+    <button type="button" class="btn btn-primary" id="convertBtn" disabled>
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12h13M17 12l-4-4M17 12l-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Konversi ke XML
+    </button>
+  </div>
+
+  <!-- ============ STAGE 4: OUTPUT ============ -->
+  <section class="stage" id="stageOutput" style="display:none;">
+    <div class="stage-head">
+      <span class="stage-dot" id="dotOutput">4</span>
+      <span class="stage-title">Hasil</span>
+    </div>
+
+    <div class="card">
+      <div class="result-banner">
+        <svg viewBox="0 0 20 20" fill="none"><circle cx="10" cy="10" r="9" fill="#fff" stroke="#0B0B0C" stroke-width="1.4"/><path d="M6 10.5l2.5 2.5L14.5 7" stroke="#0B0B0C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span id="resultText">Berhasil dikonversi.</span>
+      </div>
+
+      <div class="code-box" id="codeBox"></div>
+
+      <div class="btn-row">
+        <button type="button" class="btn btn-primary" id="downloadBtn">Unduh file XML</button>
+        <button type="button" class="btn btn-secondary" id="copyBtn">Salin XML</button>
+      </div>
+
+      <div class="import-tip">
+        <svg viewBox="0 0 20 20" fill="none"><path d="M10 2v9M10 11l-3.5-3.5M10 11l3.5-3.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 14v2a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        <span><strong>Cara impor:</strong> di Alight Motion, buka Proyek → tombol tambah → Impor → pilih file XML ini.</span>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<footer class="foot">
+  <p>Dibuat untuk komunitas preset Alight Motion. Berjalan sepenuhnya di perangkatmu.</p>
+</footer>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+
+/* ===================== Matrix utilities ===================== */
+const AMEngine = (() => {
+  const IDENTITY = [1, 0, 0, 1, 0, 0];
+
+  function mmul(m1, m2) {
+    const [a1, b1, c1, d1, e1, f1] = m1;
+    const [a2, b2, c2, d2, e2, f2] = m2;
+    return [
+      a1 * a2 + c1 * b2,
+      b1 * a2 + d1 * b2,
+      a1 * c2 + c1 * d2,
+      b1 * c2 + d1 * d2,
+      a1 * e2 + c1 * f2 + e1,
+      b1 * e2 + d1 * f2 + f1,
+    ];
+  }
+  function mpoint(m, x, y) {
+    return { x: m[0] * x + m[2] * y + m[4], y: m[1] * x + m[3] * y + m[5] };
+  }
+  function mtranslate(tx, ty = 0) {
+    return [1, 0, 0, 1, tx, ty];
+  }
+  function mscale(sx, sy = sx) {
+    return [sx, 0, 0, sy, 0, 0];
+  }
+  function mrotate(deg, cx = 0, cy = 0) {
+    const r = (deg * Math.PI) / 180;
+    const cos = Math.cos(r),
+      sin = Math.sin(r);
+    const m = [cos, sin, -sin, cos, 0, 0];
+    if (cx !== 0 || cy !== 0) {
+      return mmul(mmul(mtranslate(cx, cy), m), mtranslate(-cx, -cy));
+    }
+    return m;
+  }
+  function mskewX(deg) {
+    return [1, 0, Math.tan((deg * Math.PI) / 180), 1, 0, 0];
+  }
+  function mskewY(deg) {
+    return [1, Math.tan((deg * Math.PI) / 180), 0, 1, 0, 0];
+  }
+
+  function parseComputedTransform(cs) {
+    const t = (cs.transform || "none").trim();
+    if (!t || t === "none") return IDENTITY;
+    let m = t.match(/^matrix\(\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^,]+),\s*([^)]+)\)$/);
+    if (m) return m.slice(1, 7).map(Number);
+    m = t.match(/^matrix3d\(([^)]+)\)$/);
+    if (m) {
+      const v = m[1].split(",").map((s) => parseFloat(s.trim()));
+      if (v.length === 16) return [v[0], v[1], v[4], v[5], v[12], v[13]];
+    }
+    return IDENTITY;
+  }
+
+  // Element-own transform, unifying the SVG `transform` presentation attribute with any CSS
+  // `transform` (inline style or stylesheet rule) via the browser's own cascade + resolution -
+  // matches native getCTM() exactly (verified), so no separate attribute-string parsing needed.
+  function elementOwnMatrix(el) {
+    return parseComputedTransform(getComputedStyle(el));
+  }
+
+  function parseTransformAttr(str) {
+    let m = IDENTITY;
+    if (!str) return m;
+    const re = /(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g;
+    let match;
+    while ((match = re.exec(str))) {
+      const name = match[1];
+      const args = match[2]
+        .trim()
+        .split(/[\s,]+/)
+        .filter((s) => s.length)
+        .map(Number);
+      let next;
+      switch (name) {
+        case "matrix":
+          next = args.length === 6 ? args : IDENTITY;
+          break;
+        case "translate":
+          next = mtranslate(args[0] || 0, args[1] || 0);
+          break;
+        case "scale":
+          next = mscale(args[0], args.length > 1 ? args[1] : args[0]);
+          break;
+        case "rotate":
+          next = mrotate(args[0] || 0, args[1] || 0, args[2] || 0);
+          break;
+        case "skewX":
+          next = mskewX(args[0] || 0);
+          break;
+        case "skewY":
+          next = mskewY(args[0] || 0);
+          break;
+        default:
+          next = IDENTITY;
+      }
+      m = mmul(m, next);
+    }
+    return m;
+  }
+
+  /* ===================== Path `d` parsing/normalizing ===================== */
+
+  function tokenizeArcArgs(str) {
+    const s = str.trim();
+    let idx = 0;
+    const nums = [];
+    const numRe = /[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][+-]?\d+)?/y;
+    const flagRe = /[01]/y;
+    const skipSep = () => {
+      while (idx < s.length && /[\s,]/.test(s[idx])) idx++;
+    };
+    let count = 0;
+    while (idx < s.length) {
+      skipSep();
+      if (idx >= s.length) break;
+      const posInGroup = count % 7;
+      if (posInGroup === 3 || posInGroup === 4) {
+        flagRe.lastIndex = idx;
+        const m = flagRe.exec(s);
+        if (!m) break;
+        nums.push(Number(m[0]));
+        idx = flagRe.lastIndex;
+      } else {
+        numRe.lastIndex = idx;
+        const m = numRe.exec(s);
+        if (!m) break;
+        nums.push(Number(m[0]));
+        idx = numRe.lastIndex;
+      }
+      count++;
+    }
+    return nums;
+  }
+
+  function tokenizeCommands(d) {
+    const cmdRe = /([MmLlHhVvCcSsQqTtAaZz])/;
+    const parts = d
+      .trim()
+      .split(cmdRe)
+      .map((s) => s.trim())
+      .filter((s) => s.length);
+    const numRe = /[+-]?(?:\d*\.\d+|\d+\.?\d*)(?:[eE][+-]?\d+)?/g;
+    const out = [];
+    let i = 0;
+    while (i < parts.length) {
+      const cmd = parts[i];
+      if (!/[A-Za-z]/.test(cmd)) {
+        i++;
+        continue;
+      }
+      let numStr = "";
+      if (i + 1 < parts.length && !/[A-Za-z]/.test(parts[i + 1])) {
+        numStr = parts[i + 1];
+        i += 2;
+      } else {
+        i += 1;
+      }
+      let nums = (numStr.match(numRe) || []).map(Number);
+      if (cmd.toLowerCase() === "a") {
+        nums = tokenizeArcArgs(numStr);
+      }
+      out.push({ cmd, nums });
+    }
+    return out;
+  }
+
+  function arcToCubicSegments(x1, y1, rx, ry, phiDeg, largeArc, sweep, x2, y2) {
+    if (rx === 0 || ry === 0 || (x1 === x2 && y1 === y2)) return [];
+    rx = Math.abs(rx);
+    ry = Math.abs(ry);
+    const phi = ((phiDeg % 360) * Math.PI) / 180;
+    const cosPhi = Math.cos(phi),
+      sinPhi = Math.sin(phi);
+    const dx2 = (x1 - x2) / 2,
+      dy2 = (y1 - y2) / 2;
+    const x1p = cosPhi * dx2 + sinPhi * dy2;
+    const y1p = -sinPhi * dx2 + cosPhi * dy2;
+    let rxSq = rx * rx,
+      rySq = ry * ry;
+    const x1pSq = x1p * x1p,
+      y1pSq = y1p * y1p;
+    const lambda = x1pSq / rxSq + y1pSq / rySq;
+    if (lambda > 1) {
+      const s = Math.sqrt(lambda);
+      rx *= s;
+      ry *= s;
+      rxSq = rx * rx;
+      rySq = ry * ry;
+    }
+    const sign = largeArc !== sweep ? 1 : -1;
+    let num = rxSq * rySq - rxSq * y1pSq - rySq * x1pSq;
+    if (num < 0) num = 0;
+    const co = sign * Math.sqrt(num / (rxSq * y1pSq + rySq * x1pSq || 1e-12));
+    const cxp = (co * (rx * y1p)) / ry;
+    const cyp = (co * -(ry * x1p)) / rx;
+    const cx = cosPhi * cxp - sinPhi * cyp + (x1 + x2) / 2;
+    const cy = sinPhi * cxp + cosPhi * cyp + (y1 + y2) / 2;
+
+    const angle = (ux, uy, vx, vy) => {
+      const dot = ux * vx + uy * vy;
+      const len = Math.sqrt(ux * ux + uy * uy) * Math.sqrt(vx * vx + vy * vy);
+      let a = Math.acos(Math.min(1, Math.max(-1, dot / len)));
+      if (ux * vy - uy * vx < 0) a = -a;
+      return a;
+    };
+    const theta1 = angle(1, 0, (x1p - cxp) / rx, (y1p - cyp) / ry);
+    let dTheta = angle(
+      (x1p - cxp) / rx,
+      (y1p - cyp) / ry,
+      (-x1p - cxp) / rx,
+      (-y1p - cyp) / ry
+    );
+    if (!sweep && dTheta > 0) dTheta -= 2 * Math.PI;
+    if (sweep && dTheta < 0) dTheta += 2 * Math.PI;
+
+    const numSegs = Math.max(1, Math.ceil(Math.abs(dTheta) / (Math.PI / 2)));
+    const segAngle = dTheta / numSegs;
+    const alpha = (4 / 3) * Math.tan(segAngle / 4);
+    const segments = [];
+    let a1 = theta1;
+    for (let i = 0; i < numSegs; i++) {
+      const a2 = a1 + segAngle;
+      const cosA1 = Math.cos(a1),
+        sinA1 = Math.sin(a1);
+      const cosA2 = Math.cos(a2),
+        sinA2 = Math.sin(a2);
+      const p1 = { x: cosA1, y: sinA1 };
+      const p2 = { x: cosA2, y: sinA2 };
+      const q1 = { x: p1.x - alpha * sinA1, y: p1.y + alpha * cosA1 };
+      const q2 = { x: p2.x + alpha * sinA2, y: p2.y - alpha * cosA2 };
+      const tf = (p) => {
+        const sx = p.x * rx,
+          sy = p.y * ry;
+        const rx2 = sx * cosPhi - sy * sinPhi;
+        const ry2 = sx * sinPhi + sy * cosPhi;
+        return { x: rx2 + cx, y: ry2 + cy };
+      };
+      const C1 = tf(q1),
+        C2 = tf(q2),
+        E = tf(p2);
+      segments.push({ x1: C1.x, y1: C1.y, x2: C2.x, y2: C2.y, x: E.x, y: E.y });
+      a1 = a2;
+    }
+    return segments;
+  }
+
+  function parsePathD(d) {
+    const commands = tokenizeCommands(d || "");
+    const subpaths = [];
+    let cur = null;
+    let cx = 0,
+      cy = 0;
+    let sx = 0,
+      sy = 0;
+    let prevCmd = null;
+    let prevCtrl = null;
+
+    const startSubpath = (x, y) => {
+      cur = [];
+      subpaths.push(cur);
+      cur.push({ type: "M", x, y });
+      cx = sx = x;
+      cy = sy = y;
+    };
+
+    for (const { cmd, nums } of commands) {
+      const isRel = cmd === cmd.toLowerCase();
+      const C = cmd.toUpperCase();
+
+      if (C === "M") {
+        for (let i = 0; i < nums.length; i += 2) {
+          let x = nums[i],
+            y = nums[i + 1];
+          if (isRel) {
+            x += cx;
+            y += cy;
+          }
+          if (i === 0) startSubpath(x, y);
+          else {
+            cur.push({ type: "L", x, y });
+            cx = x;
+            cy = y;
+          }
+        }
+        prevCtrl = null;
+        prevCmd = "M";
+      } else if (C === "L") {
+        for (let i = 0; i < nums.length; i += 2) {
+          let x = nums[i],
+            y = nums[i + 1];
+          if (isRel) {
+            x += cx;
+            y += cy;
+          }
+          cur.push({ type: "L", x, y });
+          cx = x;
+          cy = y;
+        }
+        prevCtrl = null;
+        prevCmd = "L";
+      } else if (C === "H") {
+        for (let i = 0; i < nums.length; i++) {
+          let x = nums[i];
+          if (isRel) x += cx;
+          cur.push({ type: "L", x, y: cy });
+          cx = x;
+        }
+        prevCtrl = null;
+        prevCmd = "H";
+      } else if (C === "V") {
+        for (let i = 0; i < nums.length; i++) {
+          let y = nums[i];
+          if (isRel) y += cy;
+          cur.push({ type: "L", x: cx, y });
+          cy = y;
+        }
+        prevCtrl = null;
+        prevCmd = "V";
+      } else if (C === "C") {
+        for (let i = 0; i < nums.length; i += 6) {
+          let [x1, y1, x2, y2, x, y] = nums.slice(i, i + 6);
+          if (isRel) {
+            x1 += cx;
+            y1 += cy;
+            x2 += cx;
+            y2 += cy;
+            x += cx;
+            y += cy;
+          }
+          cur.push({ type: "C", x1, y1, x2, y2, x, y });
+          prevCtrl = { x: x2, y: y2 };
+          cx = x;
+          cy = y;
+        }
+        prevCmd = "C";
+      } else if (C === "S") {
+        for (let i = 0; i < nums.length; i += 4) {
+          let [x2, y2, x, y] = nums.slice(i, i + 4);
+          if (isRel) {
+            x2 += cx;
+            y2 += cy;
+            x += cx;
+            y += cy;
+          }
+          const reflected =
+            prevCmd && (prevCmd === "C" || prevCmd === "S")
+              ? { x: 2 * cx - prevCtrl.x, y: 2 * cy - prevCtrl.y }
+              : { x: cx, y: cy };
+          cur.push({ type: "C", x1: reflected.x, y1: reflected.y, x2, y2, x, y });
+          prevCtrl = { x: x2, y: y2 };
+          cx = x;
+          cy = y;
+          prevCmd = "S";
+        }
+      } else if (C === "Q") {
+        for (let i = 0; i < nums.length; i += 4) {
+          let [qx, qy, x, y] = nums.slice(i, i + 4);
+          if (isRel) {
+            qx += cx;
+            qy += cy;
+            x += cx;
+            y += cy;
+          }
+          const x1 = cx + (2 / 3) * (qx - cx);
+          const y1 = cy + (2 / 3) * (qy - cy);
+          const x2 = x + (2 / 3) * (qx - x);
+          const y2 = y + (2 / 3) * (qy - y);
+          cur.push({ type: "C", x1, y1, x2, y2, x, y });
+          prevCtrl = { x: qx, y: qy };
+          cx = x;
+          cy = y;
+          prevCmd = "Q";
+        }
+      } else if (C === "T") {
+        for (let i = 0; i < nums.length; i += 2) {
+          let [x, y] = nums.slice(i, i + 2);
+          if (isRel) {
+            x += cx;
+            y += cy;
+          }
+          const qp =
+            prevCmd && (prevCmd === "Q" || prevCmd === "T")
+              ? { x: 2 * cx - prevCtrl.x, y: 2 * cy - prevCtrl.y }
+              : { x: cx, y: cy };
+          const x1 = cx + (2 / 3) * (qp.x - cx);
+          const y1 = cy + (2 / 3) * (qp.y - cy);
+          const x2 = x + (2 / 3) * (qp.x - x);
+          const y2 = y + (2 / 3) * (qp.y - y);
+          cur.push({ type: "C", x1, y1, x2, y2, x, y });
+          prevCtrl = { x: qp.x, y: qp.y };
+          cx = x;
+          cy = y;
+          prevCmd = "T";
+        }
+      } else if (C === "A") {
+        for (let i = 0; i < nums.length; i += 7) {
+          let [rx, ry, rot, laf, sf, x, y] = nums.slice(i, i + 7);
+          if (isRel) {
+            x += cx;
+            y += cy;
+          }
+          const segs = arcToCubicSegments(cx, cy, rx, ry, rot, !!laf, !!sf, x, y);
+          if (segs.length === 0) cur.push({ type: "L", x, y });
+          else for (const s of segs) cur.push({ type: "C", ...s });
+          cx = x;
+          cy = y;
+        }
+        prevCtrl = null;
+        prevCmd = "A";
+      } else if (C === "Z") {
+        cur.push({ type: "Z" });
+        cx = sx;
+        cy = sy;
+        prevCtrl = null;
+        prevCmd = "Z";
+      }
+    }
+    return subpaths;
+  }
+
+  /* ===================== Basic shape -> path `d` ===================== */
+
+  function num(v, def = 0) {
+    const n = parseFloat(v);
+    return Number.isFinite(n) ? n : def;
+  }
+
+  function rectToD(el) {
+    const x = num(el.getAttribute("x"), 0);
+    const y = num(el.getAttribute("y"), 0);
+    const w = num(el.getAttribute("width"), 0);
+    const h = num(el.getAttribute("height"), 0);
+    if (w <= 0 || h <= 0) return null;
+    let rx = el.getAttribute("rx");
+    let ry = el.getAttribute("ry");
+    rx = rx === null ? null : num(rx, 0);
+    ry = ry === null ? null : num(ry, 0);
+    if (rx === null && ry === null) {
+      rx = ry = 0;
+    } else if (rx === null) {
+      rx = ry;
+    } else if (ry === null) {
+      ry = rx;
+    }
+    rx = Math.min(rx, w / 2);
+    ry = Math.min(ry, h / 2);
+    if (rx <= 0 || ry <= 0) {
+      return `M${x} ${y}L${x + w} ${y}L${x + w} ${y + h}L${x} ${y + h}Z`;
+    }
+    return (
+      `M${x + rx} ${y}` +
+      `L${x + w - rx} ${y}` +
+      `A${rx} ${ry} 0 0 1 ${x + w} ${y + ry}` +
+      `L${x + w} ${y + h - ry}` +
+      `A${rx} ${ry} 0 0 1 ${x + w - rx} ${y + h}` +
+      `L${x + rx} ${y + h}` +
+      `A${rx} ${ry} 0 0 1 ${x} ${y + h - ry}` +
+      `L${x} ${y + ry}` +
+      `A${rx} ${ry} 0 0 1 ${x + rx} ${y}` +
+      `Z`
+    );
+  }
+
+  function circleToD(el) {
+    const cx = num(el.getAttribute("cx"), 0);
+    const cy = num(el.getAttribute("cy"), 0);
+    const r = num(el.getAttribute("r"), 0);
+    if (r <= 0) return null;
+    return `M${cx + r} ${cy}A${r} ${r} 0 0 1 ${cx - r} ${cy}A${r} ${r} 0 0 1 ${cx + r} ${cy}Z`;
+  }
+
+  function ellipseToD(el) {
+    const cx = num(el.getAttribute("cx"), 0);
+    const cy = num(el.getAttribute("cy"), 0);
+    const rx = num(el.getAttribute("rx"), 0);
+    const ry = num(el.getAttribute("ry"), 0);
+    if (rx <= 0 || ry <= 0) return null;
+    return `M${cx + rx} ${cy}A${rx} ${ry} 0 0 1 ${cx - rx} ${cy}A${rx} ${ry} 0 0 1 ${cx + rx} ${cy}Z`;
+  }
+
+  function pointsAttrToPairs(str) {
+    const nums = (str.match(/-?\d*\.?\d+(?:[eE][+-]?\d+)?/g) || []).map(Number);
+    const pts = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i], nums[i + 1]]);
+    return pts;
+  }
+
+  function polygonToD(el) {
+    const pts = pointsAttrToPairs(el.getAttribute("points") || "");
+    if (pts.length < 2) return null;
+    return "M" + pts.map((p) => `${p[0]} ${p[1]}`).join("L") + "Z";
+  }
+
+  function polylineToD(el) {
+    const pts = pointsAttrToPairs(el.getAttribute("points") || "");
+    if (pts.length < 2) return null;
+    // Closed implicitly for FILL purposes (matches SVG/NanoVG fill semantics).
+    return "M" + pts.map((p) => `${p[0]} ${p[1]}`).join("L") + "Z";
+  }
+
+  function lineToD(el) {
+    const x1 = num(el.getAttribute("x1"), 0);
+    const y1 = num(el.getAttribute("y1"), 0);
+    const x2 = num(el.getAttribute("x2"), 0);
+    const y2 = num(el.getAttribute("y2"), 0);
+    if (x1 === x2 && y1 === y2) return null;
+    return `M${x1} ${y1}L${x2} ${y2}`; // open path: never filled, only usable for stroke
+  }
+
+  const SHAPE_CONVERTERS = {
+    rect: rectToD,
+    circle: circleToD,
+    ellipse: ellipseToD,
+    polygon: polygonToD,
+    polyline: polylineToD,
+    line: lineToD,
+  };
+
+  /* ===================== Color parsing ===================== */
+
+  function parseRgbString(s) {
+    if (!s) return null;
+    const m = s.match(
+      /rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*(?:,\s*([\d.]+))?\s*\)/i
+    );
+    if (!m) return null;
+    return {
+      r: Math.round(parseFloat(m[1])),
+      g: Math.round(parseFloat(m[2])),
+      b: Math.round(parseFloat(m[3])),
+      a: m[4] !== undefined ? parseFloat(m[4]) : 1,
+    };
+  }
+
+  function toHex2(n) {
+    return Math.max(0, Math.min(255, Math.round(n)))
+      .toString(16)
+      .padStart(2, "0");
+  }
+
+  /* ===================== Number formatting (AM conventions) ===================== */
+
+  function fmtFixed6(n) {
+    if (!Number.isFinite(n)) n = 0;
+    return n.toFixed(6);
+  }
+  function fmtPath(n) {
+    if (!Number.isFinite(n)) n = 0;
+    let s = n.toFixed(6);
+    s = s.replace(/0+$/, "");
+    if (s.endsWith(".")) s += "0";
+    if (s === "-0.0") s = "0.0";
+    return s;
+  }
+
+  function xmlEscape(s) {
+    return String(s)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+  }
+
+  /* ===================== SVG tree walking ===================== */
+
+  const NS_XLINK = "http://www.w3.org/1999/xlink";
+
+  /* ===================== Marching squares (contour tracing for clip-path) ===================== */
+
+  function msGetCell(mask, w, h, x, y) {
+    if (x < 0 || y < 0 || x >= w || y >= h) return 0;
+    return mask[y * w + x] ? 1 : 0;
+  }
+
+  function msTraceSegments(mask, w, h) {
+    const cellCase = (cx, cy) => {
+      const tl = msGetCell(mask, w, h, cx, cy);
+      const tr = msGetCell(mask, w, h, cx + 1, cy);
+      const br = msGetCell(mask, w, h, cx + 1, cy + 1);
+      const bl = msGetCell(mask, w, h, cx, cy + 1);
+      return tl * 8 + tr * 4 + br * 2 + bl * 1;
+    };
+    const segments = [];
+    // Iterate a virtual row/column of "outside" cells at cx=-1 and cy=-1 too, in addition to
+    // the real cx=0..w-1 / cy=0..h-1 grid. The rightmost/bottommost real cells already see
+    // "outside" correctly via msGetCell's own bounds check on their tr/br/bl neighbours, so
+    // nothing extra is needed on that side. But leftmost-column cells use REAL mask values
+    // for tl/bl (never forced to 0), and topmost-row cells use REAL values for tl/tr - so a
+    // transition landing exactly on the canvas's left or top edge has no cell on the far side
+    // to pair its segment with. That leaves one dead-end and one orphan-start segment in the
+    // set, which the linker later force-closes with a spurious straight edge clear across the
+    // canvas (the diagonal-split artifact seen when a background/silhouette shape touches
+    // those edges). Computing the cx=-1 column and cy=-1 row - all "outside" on their missing
+    // side, via the very same msGetCell bounds check - supplies the missing pairing segment.
+    for (let cy = -1; cy < h; cy++) {
+      for (let cx = -1; cx < w; cx++) {
+        const c = cellCase(cx, cy);
+        if (c === 0 || c === 15) continue;
+        const T = { x: cx + 0.5, y: cy };
+        const R = { x: cx + 1, y: cy + 0.5 };
+        const B = { x: cx + 0.5, y: cy + 1 };
+        const L = { x: cx, y: cy + 0.5 };
+        switch (c) {
+          case 1: segments.push([L, B]); break;
+          case 2: segments.push([B, R]); break;
+          case 3: segments.push([L, R]); break;
+          case 4: segments.push([R, T]); break;
+          case 5: segments.push([R, T]); segments.push([L, B]); break;
+          case 6: segments.push([B, T]); break;
+          case 7: segments.push([L, T]); break;
+          case 8: segments.push([T, L]); break;
+          case 9: segments.push([T, B]); break;
+          case 10: segments.push([T, L]); segments.push([B, R]); break;
+          case 11: segments.push([T, R]); break;
+          case 12: segments.push([R, L]); break;
+          case 13: segments.push([R, B]); break;
+          case 14: segments.push([B, L]); break;
+        }
+      }
+    }
+    return segments;
+  }
+
+  function msLinkSegments(segments) {
+    const eps = 1e-6;
+    const key = (p) => `${Math.round(p.x / eps)}_${Math.round(p.y / eps)}`;
+    const startMap = new Map();
+    segments.forEach((s, i) => {
+      const k = key(s[0]);
+      if (!startMap.has(k)) startMap.set(k, []);
+      startMap.get(k).push(i);
+    });
+    const used = new Array(segments.length).fill(false);
+    const contours = [];
+    for (let i = 0; i < segments.length; i++) {
+      if (used[i]) continue;
+      const contour = [];
+      let cur = i;
+      let guard = 0;
+      while (cur !== undefined && !used[cur] && guard < segments.length + 5) {
+        used[cur] = true;
+        const [a, b] = segments[cur];
+        contour.push(a);
+        const k = key(b);
+        const candidates = (startMap.get(k) || []).filter((idx) => !used[idx]);
+        cur = candidates.length ? candidates[0] : undefined;
+        guard++;
+      }
+      if (contour.length >= 3) contours.push(contour);
+    }
+    return contours;
+  }
+
+  function traceMaskContours(mask, w, h) {
+    return msLinkSegments(msTraceSegments(mask, w, h));
+  }
+
+  function perpendicularDistance(pt, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 === 0) return Math.hypot(pt.x - a.x, pt.y - a.y);
+    let t = ((pt.x - a.x) * dx + (pt.y - a.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(pt.x - (a.x + t * dx), pt.y - (a.y + t * dy));
+  }
+  function rdpSimplify(points, tolerance) {
+    if (points.length < 3) return points.slice();
+    let maxDist = 0, idx = 0;
+    const a = points[0], b = points[points.length - 1];
+    for (let i = 1; i < points.length - 1; i++) {
+      const d = perpendicularDistance(points[i], a, b);
+      if (d > maxDist) { maxDist = d; idx = i; }
+    }
+    if (maxDist > tolerance) {
+      const left = rdpSimplify(points.slice(0, idx + 1), tolerance);
+      const right = rdpSimplify(points.slice(idx), tolerance);
+      return left.slice(0, -1).concat(right);
+    }
+    return [a, b];
+  }
+  function simplifyClosedPolygon(points, tolerance) {
+    if (points.length <= 4) return points;
+    let cx = 0, cy = 0;
+    for (const p of points) { cx += p.x; cy += p.y; }
+    cx /= points.length; cy /= points.length;
+    let farIdx = 0, farDist = -1;
+    for (let i = 0; i < points.length; i++) {
+      const d = Math.hypot(points[i].x - cx, points[i].y - cy);
+      if (d > farDist) { farDist = d; farIdx = i; }
+    }
+    const rotated = points.slice(farIdx).concat(points.slice(0, farIdx));
+    rotated.push(rotated[0]);
+    const simplified = rdpSimplify(rotated, tolerance);
+    simplified.pop();
+    return simplified.length >= 3 ? simplified : points;
+  }
+
+  /* ===================== Clip-path resolution ===================== */
+
+  function subpathsBBox(subpathsList) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const subpaths of subpathsList) {
+      for (const sp of subpaths) {
+        for (const seg of sp) {
+          if (seg.type === "Z") continue;
+          const xs = seg.type === "C" ? [seg.x1, seg.x2, seg.x] : [seg.x];
+          const ys = seg.type === "C" ? [seg.y1, seg.y2, seg.y] : [seg.y];
+          for (const x of xs) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+          for (const y of ys) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        }
+      }
+    }
+    return { minX, minY, maxX, maxY };
+  }
+
+  function transformSubpaths(subpaths, m) {
+    return subpaths.map((sp) =>
+      sp.map((seg) => {
+        if (seg.type === "Z") return seg;
+        if (seg.type === "C") {
+          const p1 = mpoint(m, seg.x1, seg.y1);
+          const p2 = mpoint(m, seg.x2, seg.y2);
+          const p = mpoint(m, seg.x, seg.y);
+          return { type: "C", x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, x: p.x, y: p.y };
+        }
+        const p = mpoint(m, seg.x, seg.y);
+        return { type: seg.type, x: p.x, y: p.y };
+      })
+    );
+  }
+
+  // General-purpose recursive collector: walks a container's descendants (patterns, masks)
+  // gathering {subpaths (in the container's own local space), rgba} for every filled shape
+  // found. Simpler than the main tree walker (no clip-path/stroke/text inside patterns/masks -
+  // an intentionally-scoped limitation for these rarer nested contexts) but handles the common
+  // cases: nested <g> with transforms, all basic shape types, inherited/computed fill+opacity.
+  function collectPaintableGeometry(containerEl, baseMatrix) {
+    const out = [];
+    const visit = (el, matrix, depth) => {
+      if (depth > 20) return;
+      const tag = el.tagName.toLowerCase();
+      if (["defs", "clippath", "mask", "title", "desc", "metadata", "style"].includes(tag)) return;
+      if (isDisplayNoneOrHidden(el)) return;
+      const ownM = mmul(matrix, elementOwnMatrix(el));
+      if (tag === "g" || tag === "a" || tag === "switch") {
+        for (const child of Array.from(el.children)) visit(child, ownM, depth + 1);
+        return;
+      }
+      const d = localPathDFor(el);
+      if (!d) return;
+      const cs = getComputedStyle(el);
+      const fill = resolvePaint(el, cs, "fill", "fillOpacity");
+      if (!fill) return;
+      const op = parseFloat(cs.opacity);
+      const alpha = fill.a * (Number.isFinite(op) ? op : 1);
+      if (alpha <= 0.001) return;
+      const subpaths = transformSubpaths(parsePathD(d), ownM);
+      out.push({ subpaths, rgba: { r: fill.r, g: fill.g, b: fill.b, a: Math.min(1, alpha) } });
+    };
+    for (const child of Array.from(containerEl.children)) visit(child, baseMatrix, 0);
+    return out;
+  }
+
+  // Renders collected paintable geometry into a canvas covering `region` (local-space bbox),
+  // returning the 2D context plus the pixel<->local mapping for further sampling.
+  function rasterizeGeometry(items, region, targetPx, clipRect) {
+    const w = Math.max(region.maxX - region.minX, 1e-6);
+    const h = Math.max(region.maxY - region.minY, 1e-6);
+    const scale = Math.min(24, Math.max(1, (targetPx || 600) / Math.max(w, h)));
+    const cw = Math.max(4, Math.min(1400, Math.round(w * scale)));
+    const ch = Math.max(4, Math.min(1400, Math.round(h * scale)));
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, -region.minX * scale, -region.minY * scale);
+    if (clipRect) {
+      ctx.beginPath();
+      ctx.rect(clipRect.x, clipRect.y, clipRect.w, clipRect.h);
+      ctx.clip();
+    }
+    for (const item of items) {
+      const p = new Path2D();
+      for (const sp of item.subpaths) {
+        for (const s of sp) {
+          if (s.type === "M") p.moveTo(s.x, s.y);
+          else if (s.type === "L") p.lineTo(s.x, s.y);
+          else if (s.type === "C") p.bezierCurveTo(s.x1, s.y1, s.x2, s.y2, s.x, s.y);
+          else if (s.type === "Z") p.closePath();
+        }
+      }
+      ctx.fillStyle = `rgba(${item.rgba.r},${item.rgba.g},${item.rgba.b},${item.rgba.a})`;
+      ctx.fill(p, "nonzero");
+    }
+    return { ctx, cw, ch, scale, minX: region.minX, minY: region.minY };
+  }
+
+  // Approximates a <pattern> fill as a single solid color: the average RGBA over one tile.
+  function pctOrNum(v, def) {
+    if (v == null) return def;
+    const s = String(v).trim();
+    if (s.endsWith("%")) return parseFloat(s) / 100;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : def;
+  }
+
+  // Resolves a <mask>'s content into local subpaths approximating its clip region: renders the
+  // mask's children (respecting their own fill/opacity), thresholds by luminance*alpha > 0.5
+  // (SVG's default mask-type), and traces the boundary - producing clip-like geometry that can
+  // flow through the exact same clipStack/applyClip machinery as clip-path. Smooth/gradient
+  // masks are thus approximated as a hard edge at the 50% mark rather than true soft alpha,
+  // matching the same "fill approximated as nearest hard shape" spirit as the gradient fallback.
+  function resolveMaskSubpaths(maskEl, targetLocalBBox) {
+    const maskUnits = maskEl.getAttribute("maskUnits") || "objectBoundingBox";
+    const contentUnits = maskEl.getAttribute("maskContentUnits") || "userSpaceOnUse";
+    const bw = targetLocalBBox.maxX - targetLocalBBox.minX || 1;
+    const bh = targetLocalBBox.maxY - targetLocalBBox.minY || 1;
+
+    let x, y, w, h;
+    if (maskUnits === "objectBoundingBox") {
+      x = targetLocalBBox.minX + pctOrNum(maskEl.getAttribute("x"), -0.1) * bw;
+      y = targetLocalBBox.minY + pctOrNum(maskEl.getAttribute("y"), -0.1) * bh;
+      w = pctOrNum(maskEl.getAttribute("width"), 1.2) * bw;
+      h = pctOrNum(maskEl.getAttribute("height"), 1.2) * bh;
+    } else {
+      x = num(maskEl.getAttribute("x"), targetLocalBBox.minX - 0.1 * bw);
+      y = num(maskEl.getAttribute("y"), targetLocalBBox.minY - 0.1 * bh);
+      w = num(maskEl.getAttribute("width"), 1.2 * bw);
+      h = num(maskEl.getAttribute("height"), 1.2 * bh);
+    }
+    if (w <= 0 || h <= 0) return [];
+
+    const contentMatrix = contentUnits === "objectBoundingBox" ? mscale(bw, bh) : IDENTITY;
+    const items = collectPaintableGeometry(maskEl, contentMatrix);
+    if (!items.length) return [];
+
+    // Rasterize a slightly PADDED region so the mask's own outer boundary never coincides
+    // exactly with the canvas edge (which would make it untraceable and break winding for any
+    // holes cut into it - see the fully-covering-mask case). Content is explicitly clipped to
+    // the true (unpadded) mask region so the padding margin always reads as "outside".
+    const padX = Math.max(w * 0.06, 4), padY = Math.max(h * 0.06, 4);
+    const region = { minX: x - padX, minY: y - padY, maxX: x + w + padX, maxY: y + h + padY };
+    const { ctx, cw, ch, scale, minX, minY } = rasterizeGeometry(items, region, 900, { x, y, w, h });
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    const binMask = new Uint8Array(cw * ch);
+    let any = false;
+    let allInside = true;
+    for (let i = 0; i < cw * ch; i++) {
+      const r = data[i * 4], g = data[i * 4 + 1], b = data[i * 4 + 2], a = data[i * 4 + 3] / 255;
+      const luminance = (0.2125 * r + 0.7154 * g + 0.0721 * b) / 255;
+      const inside = luminance * a > 0.5;
+      binMask[i] = inside ? 1 : 0;
+      if (inside) any = true;
+      else allInside = false;
+    }
+    if (!any) return [];
+    if (allInside) {
+      // The entire sampled region is visible (e.g. a mask that starts fully white and only
+      // carves out cutouts elsewhere) - marching squares finds no boundary here since there's
+      // nothing to trace, which correctly means "no effective restriction" rather than "hide
+      // everything". Represent that as a single rectangle covering the whole mask region.
+      return [[
+        { type: "M", x, y },
+        { type: "L", x: x + w, y },
+        { type: "L", x: x + w, y: y + h },
+        { type: "L", x, y: y + h },
+        { type: "Z" },
+      ]];
+    }
+
+    const contours = traceMaskContours(binMask, cw, ch);
+    const tol = 1.1;
+    return contours
+      .map((c) => simplifyClosedPolygon(c, tol))
+      .filter((c) => c.length >= 3)
+      .map((c) => {
+        const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x / scale + minX, y: p.y / scale + minY }));
+        sp.push({ type: "Z" });
+        return sp;
+      });
+  }
+
+  /* ===================== Raster image -> vector (color quantization + trace) ===================== */
+
+  function medianCutQuantize(pixels, maxColors) {
+    let buckets = [pixels];
+    while (buckets.length < maxColors) {
+      let splitIdx = -1, splitRange = -1, splitChannel = 0;
+      buckets.forEach((b, i) => {
+        if (b.length < 2) return;
+        for (let c = 0; c < 3; c++) {
+          let mn = Infinity, mx = -Infinity;
+          for (const p of b) { if (p[c] < mn) mn = p[c]; if (p[c] > mx) mx = p[c]; }
+          const range = mx - mn;
+          if (range > splitRange) { splitRange = range; splitIdx = i; splitChannel = c; }
+        }
+      });
+      if (splitIdx === -1 || splitRange <= 0) break;
+      const bucket = buckets[splitIdx];
+      bucket.sort((a, b) => a[splitChannel] - b[splitChannel]);
+      const mid = Math.floor(bucket.length / 2);
+      buckets.splice(splitIdx, 1, bucket.slice(0, mid), bucket.slice(mid));
+    }
+    return buckets
+      .filter((b) => b.length)
+      .map((b) => {
+        let r = 0, g = 0, bl = 0;
+        for (const p of b) { r += p[0]; g += p[1]; bl += p[2]; }
+        return { color: [Math.round(r / b.length), Math.round(g / b.length), Math.round(bl / b.length)], weight: b.length };
+      });
+  }
+
+  // Anti-aliased edges commonly produce several near-duplicate colors (blend/rounding artifacts
+  // right at a shape's boundary) that median-cut treats as distinct - merge any palette entries
+  // within a small perceptual distance into their (weight-averaged) combination, folding thin
+  // "edge ring" artifact colors back into their dominant neighbor before tracing.
+  function mergeClosePalette(entries, threshold) {
+    let list = entries.slice();
+    let merged = true;
+    while (merged && list.length > 1) {
+      merged = false;
+      outer: for (let i = 0; i < list.length; i++) {
+        for (let j = i + 1; j < list.length; j++) {
+          const [r1, g1, b1] = list[i].color, [r2, g2, b2] = list[j].color;
+          const d = Math.sqrt((r1 - r2) ** 2 + (g1 - g2) ** 2 + (b1 - b2) ** 2);
+          if (d < threshold) {
+            const w1 = list[i].weight, w2 = list[j].weight, wsum = w1 + w2;
+            const color = [
+              Math.round((r1 * w1 + r2 * w2) / wsum),
+              Math.round((g1 * w1 + g2 * w2) / wsum),
+              Math.round((b1 * w1 + b2 * w2) / wsum),
+            ];
+            list[j] = { color, weight: wsum };
+            list.splice(i, 1);
+            merged = true;
+            break outer;
+          }
+        }
+      }
+    }
+    return list;
+  }
+
+  function nearestPaletteIdx(r, g, b, palette) {
+    let best = 0, bestD = Infinity;
+    for (let i = 0; i < palette.length; i++) {
+      const [pr, pg, pb] = palette[i];
+      const d = (r - pr) ** 2 + (g - pg) ** 2 + (b - pb) ** 2;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  function polygonArea(pts) {
+    let sum = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const a = pts[i], b = pts[(i + 1) % pts.length];
+      sum += a.x * b.y - b.x * a.y;
+    }
+    return sum / 2;
+  }
+
+  // Loads an <image>'s href into a canvas and returns {cw, ch, data} or null on failure
+  // (broken link, CORS-tainted external URL, unsupported format).
+  async function loadImageToCanvas(href, maxDim) {
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      let settled = false;
+      const finish = (val) => {
+        if (settled) return;
+        settled = true;
+        resolve(val);
+      };
+      img.onload = () => {
+        try {
+          const nw = img.naturalWidth || img.width;
+          const nh = img.naturalHeight || img.height;
+          if (!nw || !nh) return finish(null);
+          const scale = Math.min(1, maxDim / Math.max(nw, nh));
+          const cw = Math.max(1, Math.round(nw * scale));
+          const ch = Math.max(1, Math.round(nh * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = cw;
+          canvas.height = ch;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, cw, ch);
+          const data = ctx.getImageData(0, 0, cw, ch);
+          finish({ cw, ch, data, naturalWidth: nw, naturalHeight: nh });
+        } catch (e) {
+          finish(null); // canvas tainted (cross-origin without proper CORS headers) or similar
+        }
+      };
+      img.onerror = () => finish(null);
+      img.src = href;
+      setTimeout(() => finish(null), 8000); // don't hang forever on a slow/broken external URL
+    });
+  }
+
+  // Quantizes a loaded raster canvas into flat color regions, tracing each into local-space
+  // subpaths (pixel coordinates; caller maps to the target's actual placement/size).
+  function quantizeAndTrace(imgData, maxColors) {
+    const { cw, ch, data } = imgData;
+    const OPAQUE_THRESHOLD = 160; // stricter than a bare "visible" cutoff, to keep semi-transparent anti-aliased edge pixels out of the palette analysis
+    const samples = [];
+    for (let i = 0; i < cw * ch; i++) {
+      if (data.data[i * 4 + 3] > OPAQUE_THRESHOLD) samples.push([data.data[i * 4], data.data[i * 4 + 1], data.data[i * 4 + 2]]);
+    }
+    if (!samples.length) return [];
+    const analysis = samples.length > 5000 ? samples.filter((_, i) => i % Math.ceil(samples.length / 5000) === 0) : samples;
+    let palette = medianCutQuantize(analysis.map((s) => s.slice()), maxColors);
+    palette = mergeClosePalette(palette, 28);
+    const paletteColors = palette.map((p) => p.color);
+
+    // Lower area floor than before: the old 0.06% threshold silently dropped small-but-real
+    // details (thin strokes, small icon features, fine text) as if they were anti-alias noise -
+    // a likely cause of "some parts not detected" on detailed source images.
+    const minAreaPx = Math.max(2, cw * ch * 0.00015);
+    const results = [];
+    for (let ci = 0; ci < paletteColors.length; ci++) {
+      const mask = new Uint8Array(cw * ch);
+      let any = false;
+      let alphaSum = 0, alphaCount = 0;
+      for (let i = 0; i < cw * ch; i++) {
+        // Was <=40: any pixel fainter than that was thrown away entirely, never traced into
+        // any shape at all (a real cause of missing/"turned transparent" regions on feathered
+        // or low-opacity source content). Lowered so faint content still becomes a shape - now
+        // with its own averaged alpha below, instead of being invisible.
+        if (data.data[i * 4 + 3] <= 8) continue;
+        const idx = nearestPaletteIdx(data.data[i * 4], data.data[i * 4 + 1], data.data[i * 4 + 2], paletteColors);
+        if (idx === ci) {
+          mask[i] = 1; any = true;
+          alphaSum += data.data[i * 4 + 3];
+          alphaCount++;
+        }
+      }
+      if (!any) continue;
+      // Average alpha of this region's own pixels, instead of forcing full opacity. A
+      // genuinely translucent area (soft shadow, watermark, feathered edge) now exports as
+      // translucent; a normal opaque photo/logo area still ends up ~1 as before.
+      const avgAlpha = alphaCount ? alphaSum / alphaCount / 255 : 1;
+      const contours = traceMaskContours(mask, cw, ch);
+      const subpaths = contours
+        .map((c) => simplifyClosedPolygon(c, 1.0))
+        .filter((c) => c.length >= 3 && Math.abs(polygonArea(c)) >= minAreaPx)
+        .map((c) => {
+          const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x, y: p.y }));
+          sp.push({ type: "Z" });
+          return sp;
+        });
+      if (subpaths.length) {
+        const [r, g, b] = paletteColors[ci];
+        results.push({ subpaths, rgba: { r, g, b, a: avgAlpha } });
+      }
+    }
+    return results;
+  }
+
+  function approximatePatternColor(patternEl, targetLocalBBox) {
+    const units = patternEl.getAttribute("patternUnits") || "objectBoundingBox";
+    const contentUnits = patternEl.getAttribute("patternContentUnits") || "userSpaceOnUse";
+    let x = num(patternEl.getAttribute("x"), 0);
+    let y = num(patternEl.getAttribute("y"), 0);
+    let w = num(patternEl.getAttribute("width"), 0);
+    let h = num(patternEl.getAttribute("height"), 0);
+    if (units === "objectBoundingBox") {
+      const bw = targetLocalBBox.maxX - targetLocalBBox.minX;
+      const bh = targetLocalBBox.maxY - targetLocalBBox.minY;
+      x = targetLocalBBox.minX + x * bw;
+      y = targetLocalBBox.minY + y * bh;
+      w *= bw;
+      h *= bh;
+    }
+    if (w <= 0 || h <= 0) return null;
+    // patternContentUnits scales the CHILDREN independently of patternUnits (a separate SVG
+    // knob): "objectBoundingBox" content is authored in a 0..1 box that maps onto the tile.
+    const contentMatrix =
+      contentUnits === "objectBoundingBox" ? mscale(w, h) : mtranslate(-x, -y);
+    const items = collectPaintableGeometry(patternEl, contentMatrix);
+    if (!items.length) return null;
+    const { ctx, cw, ch } = rasterizeGeometry(items, { minX: 0, minY: 0, maxX: w, maxY: h }, 300);
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    let r = 0, g = 0, b = 0, a = 0, n = cw * ch;
+    for (let i = 0; i < n; i++) {
+      r += data[i * 4];
+      g += data[i * 4 + 1];
+      b += data[i * 4 + 2];
+      a += data[i * 4 + 3];
+    }
+    if (a === 0) return { r: 0, g: 0, b: 0, a: 0 };
+    // Un-premultiply: canvas getImageData returns straight (non-premultiplied) alpha already,
+    // so average color should be weighted by each pixel's own alpha for a faithful blend.
+    let wr = 0, wg = 0, wb = 0, wsum = 0;
+    for (let i = 0; i < n; i++) {
+      const pa = data[i * 4 + 3] / 255;
+      wr += data[i * 4] * pa;
+      wg += data[i * 4 + 1] * pa;
+      wb += data[i * 4 + 2] * pa;
+      wsum += pa;
+    }
+    if (wsum === 0) return { r: 0, g: 0, b: 0, a: 0 };
+    return { r: wr / wsum, g: wg / wsum, b: wb / wsum, a: (a / n) / 255 };
+  }
+
+  // Resolves a <clipPath>'s content into local subpaths (its own coordinate space),
+  // applying each child's own transform and shape-conversion, unioning all children.
+  function resolveClipPathSubpaths(clipPathEl, targetLocalBBox) {
+    const units = clipPathEl.getAttribute("clipPathUnits") || "userSpaceOnUse";
+    let baseM = IDENTITY;
+    if (units === "objectBoundingBox") {
+      const bw = targetLocalBBox.maxX - targetLocalBBox.minX;
+      const bh = targetLocalBBox.maxY - targetLocalBBox.minY;
+      baseM = mmul(mtranslate(targetLocalBBox.minX, targetLocalBBox.minY), mscale(bw, bh));
+    }
+    const all = [];
+    for (const child of Array.from(clipPathEl.children)) {
+      const ctag = child.tagName.toLowerCase();
+      if (ctag === "use") {
+        const target = resolveUseTarget(child, clipPathEl.ownerDocument);
+        if (!target) continue;
+        const d = localPathDFor(target);
+        if (!d) continue;
+        const ux = num(child.getAttribute("x"), 0);
+        const uy = num(child.getAttribute("y"), 0);
+        const childM = mmul(baseM, mmul(mtranslate(ux, uy), elementOwnMatrix(target)));
+        all.push(...transformSubpaths(parsePathD(d), childM));
+        continue;
+      }
+      const d = localPathDFor(child);
+      if (!d) continue;
+      const childM = mmul(baseM, elementOwnMatrix(child));
+      all.push(...transformSubpaths(parsePathD(d), childM));
+    }
+    return all;
+  }
+
+  // Computes the intersection of targetSubpaths (fill-rule) with clipSubpaths (nonzero),
+  // both expressed in the SAME local coordinate space. Returns subpaths in that same space
+  // (as simple polygon approximations - clip results lose true bezier curvature but this is
+  // visually negligible after simplification). Returns [] if there is no overlap.
+  function clipIntersectSubpaths(targetSubpaths, clipSubpaths, fillRule) {
+    const allPts = [];
+    for (const subpaths of [targetSubpaths, clipSubpaths]) {
+      for (const sp of subpaths) for (const s of sp) {
+        if (s.type === "Z") continue;
+        allPts.push({ x: s.x, y: s.y });
+        if (s.type === "C") { allPts.push({ x: s.x1, y: s.y1 }); allPts.push({ x: s.x2, y: s.y2 }); }
+      }
+    }
+    if (!allPts.length) return [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of allPts) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const w = Math.max(maxX - minX, 1e-6), h = Math.max(maxY - minY, 1e-6);
+    const pad = Math.max(w, h) * 0.04 + 1;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    const fw = maxX - minX, fh = maxY - minY;
+    const targetPx = 1000;
+    const scale = Math.min(28, Math.max(2, targetPx / Math.max(fw, fh)));
+    const cw = Math.max(8, Math.min(2200, Math.round(fw * scale)));
+    const ch = Math.max(8, Math.min(2200, Math.round(fh * scale)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+
+    const buildPath2D = (subpaths) => {
+      const p = new Path2D();
+      for (const sp of subpaths) {
+        for (const s of sp) {
+          if (s.type === "M") p.moveTo(s.x, s.y);
+          else if (s.type === "L") p.lineTo(s.x, s.y);
+          else if (s.type === "C") p.bezierCurveTo(s.x1, s.y1, s.x2, s.y2, s.x, s.y);
+          else if (s.type === "Z") p.closePath();
+        }
+      }
+      return p;
+    };
+
+    ctx.fillStyle = "#000";
+    ctx.fill(buildPath2D(clipSubpaths), "nonzero");
+    ctx.globalCompositeOperation = "source-in";
+    ctx.fillStyle = "#000";
+    ctx.fill(buildPath2D(targetSubpaths), fillRule === "evenodd" ? "evenodd" : "nonzero");
+
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    const mask = new Uint8Array(cw * ch);
+    let anyInside = false;
+    for (let i = 0; i < cw * ch; i++) {
+      const inside = data[i * 4 + 3] > 127;
+      mask[i] = inside ? 1 : 0;
+      if (inside) anyInside = true;
+    }
+    if (!anyInside) return [];
+
+    const contours = traceMaskContours(mask, cw, ch);
+    const tol = 1.1;
+    return contours
+      .map((c) => simplifyClosedPolygon(c, tol))
+      .filter((c) => c.length >= 3)
+      .map((c) => {
+        const sp = c.map((p, i) => ({
+          type: i === 0 ? "M" : "L",
+          x: p.x / scale + minX,
+          y: p.y / scale + minY,
+        }));
+        sp.push({ type: "Z" });
+        return sp;
+      });
+  }
+
+  function getViewport(svgEl) {
+    const vb = (svgEl.getAttribute("viewBox") || "").trim();
+    if (vb) {
+      const parts = vb.split(/[\s,]+/).map(Number);
+      if (parts.length === 4 && parts.every(Number.isFinite)) {
+        return { minX: parts[0], minY: parts[1], width: parts[2], height: parts[3] };
+      }
+    }
+    const w = num(svgEl.getAttribute("width"), NaN);
+    const h = num(svgEl.getAttribute("height"), NaN);
+    return {
+      minX: 0,
+      minY: 0,
+      width: Number.isFinite(w) && w > 0 ? w : 512,
+      height: Number.isFinite(h) && h > 0 ? h : 512,
+    };
+  }
+
+  function ancestorOpacity(el, root) {
+    let opacity = 1;
+    let node = el.parentElement;
+    while (node && node !== root.parentElement) {
+      const cs = getComputedStyle(node);
+      const o = parseFloat(cs.opacity);
+      if (Number.isFinite(o)) opacity *= o;
+      if (node === root) break;
+      node = node.parentElement;
+    }
+    return opacity;
+  }
+
+  function isDisplayNoneOrHidden(el) {
+    const cs = getComputedStyle(el);
+    if (cs.display === "none") return true;
+    if (cs.visibility === "hidden" || cs.visibility === "collapse") return true;
+    return false;
+  }
+
+  // Generalized paint resolver, used for both `fill`/`fill-opacity` and `stroke`/`stroke-opacity`.
+  // Returns {r,g,b,a,approximated?} or null (null = "none" / unresolvable reference).
+  function firstGradientStopColor(refEl, doc, depth) {
+    if (!refEl || depth > 6) return null;
+    let stops = Array.from(refEl.children || []).filter((c) => c.tagName.toLowerCase() === "stop");
+    if (!stops.length) {
+      const href = refEl.getAttribute("href") || refEl.getAttributeNS(NS_XLINK, "href");
+      if (href && href.startsWith("#")) {
+        return firstGradientStopColor(doc.getElementById(href.slice(1)), doc, depth + 1);
+      }
+      return null;
+    }
+    const stop = stops[0];
+    const cs = getComputedStyle(stop);
+    const rgb = parseRgbString(cs.stopColor || cs.color);
+    if (!rgb) return null;
+    const so = parseFloat(cs.stopOpacity);
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: Number.isFinite(so) ? so : 1 };
+  }
+
+  function resolvePaint(el, cs, colorProp, opacityProp) {
+    const raw = (cs[colorProp] || "").trim();
+    if (!raw || raw === "none") return null;
+    const opacity = parseFloat(cs[opacityProp]);
+    const fo = Number.isFinite(opacity) ? opacity : 1;
+
+    const urlMatch = raw.match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+    if (urlMatch) {
+      const doc = el.ownerDocument;
+      const ref = doc.getElementById(urlMatch[1]);
+      const tag = ref && ref.tagName ? ref.tagName.toLowerCase() : "";
+      if (tag === "lineargradient" || tag === "radialgradient") {
+        const stopColor = firstGradientStopColor(ref, doc, 0);
+        if (stopColor) {
+          return { r: stopColor.r, g: stopColor.g, b: stopColor.b, a: stopColor.a * fo, approximated: "gradient" };
+        }
+      }
+      if (tag === "pattern") {
+        const dLocalForBBox = localPathDFor(el);
+        const bbox = dLocalForBBox ? subpathsBBox([parsePathD(dLocalForBBox)]) : { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+        const avg = approximatePatternColor(ref, bbox);
+        if (avg && avg.a > 0.001) {
+          return { r: avg.r, g: avg.g, b: avg.b, a: avg.a * fo, approximated: "pattern" };
+        }
+      }
+      return null; // pattern with no paintable content, or unresolvable reference
+    }
+
+    const rgb = parseRgbString(raw);
+    if (!rgb) return null;
+    return { r: rgb.r, g: rgb.g, b: rgb.b, a: rgb.a * fo };
+  }
+
+  function resolveFill(el) {
+    return resolvePaint(el, getComputedStyle(el), "fill", "fillOpacity");
+  }
+  function resolveStrokePaint(el, cs) {
+    return resolvePaint(el, cs, "stroke", "strokeOpacity");
+  }
+
+  const DASH_ARRAY_RE = /-?\d*\.?\d+(?:[eE][+-]?\d+)?/g;
+  function resolveStrokeParams(el, cs) {
+    const widthRaw = parseFloat(cs.strokeWidth);
+    const width = Number.isFinite(widthRaw) && widthRaw > 0 ? widthRaw : 1;
+    let linecap = (cs.strokeLinecap || "butt").trim();
+    if (!["butt", "round", "square"].includes(linecap)) linecap = "butt";
+    let linejoin = (cs.strokeLinejoin || "miter").trim();
+    if (!["miter", "round", "bevel"].includes(linejoin)) linejoin = "miter"; // maps miter-clip/arcs -> miter
+    const miterlimitRaw = parseFloat(cs.strokeMiterlimit);
+    const miterlimit = Number.isFinite(miterlimitRaw) && miterlimitRaw >= 1 ? miterlimitRaw : 4;
+    const dashRaw = (cs.strokeDasharray || "none").trim();
+    let dasharray = [];
+    if (dashRaw && dashRaw !== "none" && !dashRaw.includes("%")) {
+      dasharray = (dashRaw.match(DASH_ARRAY_RE) || []).map(Number).filter((n) => Number.isFinite(n) && n >= 0);
+      if (dasharray.length % 2 === 1) dasharray = dasharray.concat(dasharray); // SVG: odd-length arrays repeat once
+      if (!dasharray.some((n) => n > 0)) dasharray = [];
+    }
+    const dashoffsetRaw = parseFloat(cs.strokeDashoffset);
+    const dashoffset = Number.isFinite(dashoffsetRaw) ? dashoffsetRaw : 0;
+    return { width, linecap, linejoin, miterlimit, dasharray, dashoffset };
+  }
+
+  // Renders a stroke natively via Canvas 2D (leveraging the browser's own robust cap/join/dash
+  // implementation) and traces the painted pixels back into fill-style subpaths, in the SAME
+  // local coordinate space as the input. Mirrors clipIntersectSubpaths' rasterize+trace approach.
+  function strokeToFillSubpaths(subpaths, params) {
+    const allPts = [];
+    for (const sp of subpaths) for (const s of sp) {
+      if (s.type === "Z") continue;
+      allPts.push({ x: s.x, y: s.y });
+      if (s.type === "C") { allPts.push({ x: s.x1, y: s.y1 }); allPts.push({ x: s.x2, y: s.y2 }); }
+    }
+    if (!allPts.length) return [];
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of allPts) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    const half = params.width / 2;
+    const capExtra = params.linecap === "square" ? params.width : params.linecap === "round" ? half : 0;
+    const pad = Math.max(maxX - minX, maxY - minY) * 0.04 + half + capExtra + 2;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    const fw = Math.max(maxX - minX, 1e-6), fh = Math.max(maxY - minY, 1e-6);
+    const targetPx = 1000;
+    const scale = Math.min(30, Math.max(2, targetPx / Math.max(fw, fh)));
+    const cw = Math.max(8, Math.min(2200, Math.round(fw * scale)));
+    const ch = Math.max(8, Math.min(2200, Math.round(fh * scale)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+
+    const p2d = new Path2D();
+    for (const sp of subpaths) {
+      for (const s of sp) {
+        if (s.type === "M") p2d.moveTo(s.x, s.y);
+        else if (s.type === "L") p2d.lineTo(s.x, s.y);
+        else if (s.type === "C") p2d.bezierCurveTo(s.x1, s.y1, s.x2, s.y2, s.x, s.y);
+        else if (s.type === "Z") p2d.closePath();
+      }
+    }
+    ctx.lineWidth = params.width;
+    ctx.lineCap = params.linecap;
+    ctx.lineJoin = params.linejoin;
+    ctx.miterLimit = params.miterlimit;
+    if (params.dasharray && params.dasharray.length) {
+      ctx.setLineDash(params.dasharray);
+      ctx.lineDashOffset = params.dashoffset;
+    }
+    ctx.strokeStyle = "#000";
+    ctx.stroke(p2d);
+
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    const mask = new Uint8Array(cw * ch);
+    let any = false;
+    for (let i = 0; i < cw * ch; i++) {
+      const inside = data[i * 4 + 3] > 127;
+      mask[i] = inside ? 1 : 0;
+      if (inside) any = true;
+    }
+    if (!any) return [];
+
+    const contours = traceMaskContours(mask, cw, ch);
+    const tol = 1.1;
+    return contours
+      .map((c) => simplifyClosedPolygon(c, tol))
+      .filter((c) => c.length >= 3)
+      .map((c) => {
+        const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x / scale + minX, y: p.y / scale + minY }));
+        sp.push({ type: "Z" });
+        return sp;
+      });
+  }
+
+  function localPathDFor(el) {
+    const tag = el.tagName.toLowerCase();
+    if (tag === "path") return el.getAttribute("d") || null;
+    const conv = SHAPE_CONVERTERS[tag];
+    return conv ? conv(el) : null;
+  }
+
+  function resolveUseTarget(useEl, doc) {
+    const href =
+      useEl.getAttribute("href") || useEl.getAttributeNS(NS_XLINK, "href");
+    if (!href || !href.startsWith("#")) return null;
+    return doc.getElementById(href.slice(1));
+  }
+
+  /* ===================== Text-to-path ===================== */
+
+  // Renders a single run of text (one font/style, one baseline start point) via Canvas 2D
+  // fillText/strokeText and traces the result into local-space fill subpaths, exactly mirroring
+  // the stroke-to-fill / clip-path rasterize+trace approach.
+  function textRunToFillSubpaths(text, cssFont, originX, originY, textAlignCanvas, mode, strokeParams) {
+    if (!text || !text.trim()) return { subpaths: [], width: 0 };
+    const probe = document.createElement("canvas").getContext("2d");
+    probe.font = cssFont;
+    probe.textAlign = "left";
+    probe.textBaseline = "alphabetic";
+    const m = probe.measureText(text);
+    const width = m.width;
+    const ascent = (m.actualBoundingBoxAscent && m.actualBoundingBoxAscent > 0) ? m.actualBoundingBoxAscent : parseFloat(cssFont.match(/(\d+(?:\.\d+)?)px/)?.[1] || "16") * 0.9;
+    const descent = (m.actualBoundingBoxDescent && m.actualBoundingBoxDescent > 0) ? m.actualBoundingBoxDescent : ascent * 0.25;
+    const leftBearing = Number.isFinite(m.actualBoundingBoxLeft) ? m.actualBoundingBoxLeft : 0;
+    const rightBearing = Number.isFinite(m.actualBoundingBoxRight) ? m.actualBoundingBoxRight : width;
+    const strokePad = mode !== "fill" && strokeParams ? strokeParams.width : 0;
+    const textW = Math.max(leftBearing + rightBearing, width, 1e-3);
+    const textH = Math.max(ascent + descent, 1e-3);
+    if (textW <= 0 || textH <= 0) return { subpaths: [], width };
+
+    const pad = Math.max(textW, textH) * 0.06 + strokePad + 2;
+    const localMinX = -leftBearing - pad;
+    const localMinY = -ascent - pad;
+    const localW = textW + pad * 2;
+    const localH = textH + pad * 2;
+
+    const targetPx = 1400;
+    const scale = Math.min(20, Math.max(1, targetPx / Math.max(localW, localH)));
+    const cw = Math.max(8, Math.min(3000, Math.round(localW * scale)));
+    const ch = Math.max(8, Math.min(3000, Math.round(localH * scale)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, -localMinX * scale, -localMinY * scale);
+    ctx.font = cssFont;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#000";
+    ctx.strokeStyle = "#000";
+    if (mode === "fill" || mode === "both") ctx.fillText(text, 0, 0);
+    if (mode === "stroke" || mode === "both") {
+      ctx.lineWidth = strokeParams.width;
+      ctx.lineJoin = strokeParams.linejoin;
+      ctx.miterLimit = strokeParams.miterlimit;
+      ctx.strokeText(text, 0, 0);
+    }
+
+    const data = ctx.getImageData(0, 0, cw, ch).data;
+    const mask = new Uint8Array(cw * ch);
+    let any = false;
+    for (let i = 0; i < cw * ch; i++) {
+      const inside = data[i * 4 + 3] > 127;
+      mask[i] = inside ? 1 : 0;
+      if (inside) any = true;
+    }
+    if (!any) return { subpaths: [], width };
+
+    const contours = traceMaskContours(mask, cw, ch);
+    const tol = 0.7;
+    const subpaths = contours
+      .map((c) => simplifyClosedPolygon(c, tol))
+      .filter((c) => c.length >= 3)
+      .map((c) => {
+        const sp = c.map((p, i) => ({
+          type: i === 0 ? "M" : "L",
+          x: p.x / scale + localMinX + originX,
+          y: p.y / scale + localMinY + originY,
+        }));
+        sp.push({ type: "Z" });
+        return sp;
+      });
+    return { subpaths, width };
+  }
+
+  function cssFontString(cs) {
+    const style = cs.fontStyle && cs.fontStyle !== "normal" ? cs.fontStyle : "normal";
+    const weight = cs.fontWeight || "400";
+    const size = parseFloat(cs.fontSize) || 16;
+    const family = cs.fontFamily || "sans-serif";
+    return `${style} ${weight} ${size}px ${family}`;
+  }
+
+  // Walks a <text> element's child nodes, grouping into "chunks" (each starting at an
+  // absolute x/y - the text element's own, or any descendant tspan with explicit x/y) and
+  // within each chunk, "runs" (contiguous same-source nodes; a run's own computed style may
+  // differ from its neighbors, e.g. a bold tspan mid-sentence).
+  /* ===================== textPath support (text following a curve) ===================== */
+
+  // Flattens normalized M/L/C/Z subpaths into a single polyline with cumulative arc-length at
+  // each vertex, for sampling position+tangent at any distance along the path.
+  function flattenForArcLength(subpaths, stepsPerCurve) {
+    const pts = []; // {x,y,dist}
+    let dist = 0;
+    for (const sp of subpaths) {
+      let cx = 0, cy = 0, started = false;
+      for (const seg of sp) {
+        if (seg.type === "M") {
+          cx = seg.x; cy = seg.y;
+          pts.push({ x: cx, y: cy, dist });
+          started = true;
+        } else if (seg.type === "L") {
+          const d = Math.hypot(seg.x - cx, seg.y - cy);
+          dist += d;
+          cx = seg.x; cy = seg.y;
+          pts.push({ x: cx, y: cy, dist });
+        } else if (seg.type === "C") {
+          const x0 = cx, y0 = cy;
+          for (let i = 1; i <= stepsPerCurve; i++) {
+            const t = i / stepsPerCurve;
+            const mt = 1 - t;
+            const x = mt * mt * mt * x0 + 3 * mt * mt * t * seg.x1 + 3 * mt * t * t * seg.x2 + t * t * t * seg.x;
+            const y = mt * mt * mt * y0 + 3 * mt * mt * t * seg.y1 + 3 * mt * t * t * seg.y2 + t * t * t * seg.y;
+            dist += Math.hypot(x - cx, y - cy);
+            cx = x; cy = y;
+            pts.push({ x: cx, y: cy, dist });
+          }
+        }
+        // "Z" intentionally not closed back into the sampled polyline for textPath purposes -
+        // SVG text-on-a-path always follows the path in its drawn (open) direction.
+      }
+      if (!started) continue;
+    }
+    return { pts, totalLength: dist };
+  }
+
+  function samplePointAndTangent(flat, atDist) {
+    const { pts } = flat;
+    if (!pts.length) return null;
+    if (atDist <= pts[0].dist) {
+      const a = pts[0], b = pts[Math.min(1, pts.length - 1)];
+      const ang = Math.atan2(b.y - a.y, b.x - a.x);
+      return { x: a.x, y: a.y, angle: ang };
+    }
+    for (let i = 1; i < pts.length; i++) {
+      if (atDist <= pts[i].dist) {
+        const a = pts[i - 1], b = pts[i];
+        const span = b.dist - a.dist;
+        const t = span > 1e-9 ? (atDist - a.dist) / span : 0;
+        const x = a.x + (b.x - a.x) * t;
+        const y = a.y + (b.y - a.y) * t;
+        const ang = Math.atan2(b.y - a.y, b.x - a.x);
+        return { x, y, angle: ang };
+      }
+    }
+    return null; // atDist beyond the path's end
+  }
+
+  // Renders textPath content character-by-character along a flattened path, all onto one
+  // shared canvas (so the result traces as a single multi-contour shape, same as normal text).
+  function textPathToFillSubpaths(text, cssFont, flat, startOffset, textAlignMode) {
+    const probe = document.createElement("canvas").getContext("2d");
+    probe.font = cssFont;
+    probe.textAlign = "left";
+    probe.textBaseline = "alphabetic";
+    const chars = Array.from(text);
+    const widths = chars.map((ch) => probe.measureText(ch).width);
+    const totalTextWidth = widths.reduce((a, b) => a + b, 0);
+
+    let startDist = startOffset || 0;
+    if (textAlignMode === "middle") startDist = (flat.totalLength - totalTextWidth) / 2 + (startOffset || 0);
+    else if (textAlignMode === "end") startDist = flat.totalLength - totalTextWidth + (startOffset || 0);
+
+    const m = probe.measureText(text);
+    const ascent = m.actualBoundingBoxAscent > 0 ? m.actualBoundingBoxAscent : parseFloat(cssFont.match(/(\d+(?:\.\d+)?)px/)?.[1] || "16") * 0.9;
+    const descent = m.actualBoundingBoxDescent > 0 ? m.actualBoundingBoxDescent : ascent * 0.3;
+    const pad = ascent + descent;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    let d = startDist;
+    const placements = [];
+    for (let i = 0; i < chars.length; i++) {
+      const w = widths[i];
+      const mid = d + w / 2;
+      const pt = samplePointAndTangent(flat, mid);
+      if (pt) {
+        placements.push({ ch: chars[i], w, pt });
+        for (const [ex, ey] of [[-pad, -pad], [pad, pad], [-pad, pad], [pad, -pad]]) {
+          const px = pt.x + ex, py = pt.y + ey;
+          if (px < minX) minX = px; if (px > maxX) maxX = px;
+          if (py < minY) minY = py; if (py > maxY) maxY = py;
+        }
+      }
+      d += w;
+    }
+    if (!placements.length || !Number.isFinite(minX)) return [];
+
+    const localW = maxX - minX, localH = maxY - minY;
+    const targetPx = 1400;
+    const scale = Math.min(20, Math.max(1, targetPx / Math.max(localW, localH, 1)));
+    const cw = Math.max(8, Math.min(3000, Math.round(localW * scale)));
+    const ch2 = Math.max(8, Math.min(3000, Math.round(localH * scale)));
+
+    const canvas = document.createElement("canvas");
+    canvas.width = cw;
+    canvas.height = ch2;
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, -minX * scale, -minY * scale);
+    ctx.font = cssFont;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#000";
+    for (const p of placements) {
+      ctx.save();
+      ctx.translate(p.pt.x, p.pt.y);
+      ctx.rotate(p.pt.angle);
+      ctx.fillText(p.ch, -p.w / 2, 0);
+      ctx.restore();
+    }
+
+    const data = ctx.getImageData(0, 0, cw, ch2).data;
+    const mask = new Uint8Array(cw * ch2);
+    let any = false;
+    for (let i = 0; i < cw * ch2; i++) {
+      const inside = data[i * 4 + 3] > 127;
+      mask[i] = inside ? 1 : 0;
+      if (inside) any = true;
+    }
+    if (!any) return [];
+    const contours = traceMaskContours(mask, cw, ch2);
+    return contours
+      .map((c) => simplifyClosedPolygon(c, 0.7))
+      .filter((c) => c.length >= 3)
+      .map((c) => {
+        const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x / scale + minX, y: p.y / scale + minY }));
+        sp.push({ type: "Z" });
+        return sp;
+      });
+  }
+
+  function extractTextChunks(textEl) {
+    const num1 = (v) => {
+      if (v == null) return null;
+      const first = String(v).trim().split(/[\s,]+/)[0];
+      const n = parseFloat(first);
+      return Number.isFinite(n) ? n : null;
+    };
+    const chunks = [];
+    let currentChunk = null;
+    let cursorDx = 0, cursorDy = 0; // accumulated dy from dy-nudged runs without their own x/y
+
+    const startChunk = (x, y, anchorEl) => {
+      const cs = getComputedStyle(anchorEl);
+      currentChunk = { x, y, textAnchor: cs.textAnchor || "start", runs: [] };
+      chunks.push(currentChunk);
+      cursorDy = 0;
+    };
+
+    const visit = (node) => {
+      if (node.nodeType === 3) {
+        // bare text node - use parentElement's computed style
+        const txt = node.textContent;
+        if (txt && txt.trim().length && node.parentElement) {
+          if (!currentChunk) startChunk(0, 0, node.parentElement);
+          currentChunk.runs.push({ text: txt, styleEl: node.parentElement, dy: cursorDy });
+          cursorDy = 0;
+        }
+        return;
+      }
+      if (node.nodeType !== 1) return;
+      const tag = node.tagName.toLowerCase();
+      if (tag !== "tspan") return; // textPath, altGlyph etc. not supported - skip gracefully
+      const xAttr = num1(node.getAttribute("x"));
+      const yAttr = num1(node.getAttribute("y"));
+      const dyAttr = num1(node.getAttribute("dy")) || 0;
+      if (xAttr !== null || yAttr !== null) {
+        const x = xAttr !== null ? xAttr : currentChunk ? currentChunk.x : 0;
+        const y = yAttr !== null ? yAttr : currentChunk ? currentChunk.y : 0;
+        startChunk(x, y, node);
+        cursorDy += dyAttr;
+      } else if (dyAttr) {
+        cursorDy += dyAttr;
+      }
+      for (const child of Array.from(node.childNodes)) visit(child);
+    };
+
+    const rootX = num1(textEl.getAttribute("x")) || 0;
+    const rootY = num1(textEl.getAttribute("y")) || 0;
+    startChunk(rootX, rootY, textEl);
+    for (const child of Array.from(textEl.childNodes)) visit(child);
+    return chunks.filter((c) => c.runs.length);
+  }
+
+  /**
+   * Walk the SVG document and produce a flat list of shapes ready for AM export.
+   * Each result: { label, subpaths(local, centered), fill:{r,g,b,a}, center:{x,y} }
+   */
+  async function extractShapes(svgEl, opts = {}) {
+    const doc = svgEl.ownerDocument;
+    const results = [];
+    const warnings = [];
+    const DRAWABLE = new Set(["path", "rect", "circle", "ellipse", "polygon", "polyline", "line"]);
+    const SKIP_TAGS = new Set(["defs", "clipPath", "mask", "symbol", "title", "desc", "metadata", "style"]);
+
+    // Text rendering needs webfonts (e.g. @font-face declared in the SVG's own <style>) to have
+    // finished loading, or glyphs will trace using a fallback font. document.fonts.ready settles
+    // once fonts referenced by content already in the document have resolved.
+    if (svgEl.querySelector("text") && typeof document !== "undefined" && document.fonts) {
+      try {
+        await document.fonts.ready;
+      } catch (e) {
+        /* best-effort; proceed with whatever is loaded */
+      }
+    }
+
+    // <image> loading + color-quantization is async, but the tree walker below is synchronous
+    // (kept that way deliberately - only text/images need async work, and both are resolved
+    // up front here). Pre-load and quantize every <image> now, cache by element for the walk.
+    const imageCache = new Map();
+    const imageEls = Array.from(svgEl.querySelectorAll("image"));
+    if (imageEls.length) {
+      const maxColors = Number.isFinite(opts.imageMaxColors) ? opts.imageMaxColors : 16;
+      await Promise.all(
+        imageEls.map(async (imgEl) => {
+          const href = imgEl.getAttribute("href") || imgEl.getAttributeNS(NS_XLINK, "href");
+          if (!href) {
+            imageCache.set(imgEl, { error: "missing-href" });
+            return;
+          }
+          const loaded = await loadImageToCanvas(href, 900);
+          if (!loaded) {
+            imageCache.set(imgEl, { error: "load-failed" });
+            return;
+          }
+          const traced = quantizeAndTrace(loaded, maxColors);
+          imageCache.set(imgEl, { traced, cw: loaded.cw, ch: loaded.ch });
+        })
+      );
+    }
+
+    let autoIndex = 0;
+
+    function walk(el, parentMatrix, depth, useChain, clipStack) {
+      if (depth > 40) return; // guard against pathological recursion
+      const tag = el.tagName.toLowerCase();
+      if (SKIP_TAGS.has(tag)) return;
+      if (isDisplayNoneOrHidden(el)) return;
+
+      const ownM = elementOwnMatrix(el);
+      const matrix = mmul(parentMatrix, ownM);
+
+      // Transforms local subpaths to world space, computes bbox-center, re-centers, and
+      // pushes a finished AM shape descriptor onto `results`. Shared by every element kind
+      // (regular shapes, stroke outlines, and text runs) so the geometry pipeline stays uniform.
+      const emitShape = (subpathsLocal, rgba, label, overrideMatrix) => {
+        if (!subpathsLocal.length) return false;
+        const m = overrideMatrix || matrix;
+        let subpathsAbs = subpathsLocal.map((sp) =>
+          sp.map((seg) => {
+            if (seg.type === "Z") return seg;
+            if (seg.type === "M" || seg.type === "L") {
+              const p = mpoint(m, seg.x, seg.y);
+              return { type: seg.type, x: p.x, y: p.y };
+            }
+            const p1 = mpoint(m, seg.x1, seg.y1);
+            const p2 = mpoint(m, seg.x2, seg.y2);
+            const p = mpoint(m, seg.x, seg.y);
+            return { type: "C", x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, x: p.x, y: p.y };
+          })
+        );
+        // Apply any ancestor <g clip-path="..."> constraints (already expressed in world
+        // space) inherited from container elements above this one in the tree.
+        for (const worldClip of clipStack) {
+          subpathsAbs = clipIntersectSubpaths(subpathsAbs, worldClip, "nonzero");
+          if (!subpathsAbs.length) return false;
+        }
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const sp of subpathsAbs) {
+          for (const seg of sp) {
+            if (seg.type === "Z") continue;
+            const xs = seg.type === "C" ? [seg.x1, seg.x2, seg.x] : [seg.x];
+            const ys = seg.type === "C" ? [seg.y1, seg.y2, seg.y] : [seg.y];
+            for (const x of xs) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+            for (const y of ys) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
+          }
+        }
+        if (!Number.isFinite(minX)) return false;
+        const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        const subpathsCentered = subpathsAbs.map((sp) =>
+          sp.map((seg) => {
+            if (seg.type === "Z") return seg;
+            if (seg.type === "C") {
+              return {
+                type: "C",
+                x1: seg.x1 - center.x, y1: seg.y1 - center.y,
+                x2: seg.x2 - center.x, y2: seg.y2 - center.y,
+                x: seg.x - center.x, y: seg.y - center.y,
+              };
+            }
+            return { type: seg.type, x: seg.x - center.x, y: seg.y - center.y };
+          })
+        );
+        autoIndex++;
+        results.push({
+          label: String(label).slice(0, 80),
+          subpaths: subpathsCentered,
+          fill: { r: rgba.r, g: rgba.g, b: rgba.b, a: Math.min(1, rgba.a) },
+          center,
+          bbox: { minX, minY, maxX, maxY },
+        });
+        return true;
+      };
+
+      // Resolves this element's OWN clip-path (if any) into WORLD-space subpaths (using the
+      // matrix already computed for this element), for propagation to descendants via clipStack.
+      // Returns the (possibly unchanged) stack to pass down to children.
+      const stackWithOwnClip = (() => {
+        let stack = clipStack;
+        const ref = (el.getAttribute("clip-path") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+        if (ref) {
+          const clipPathEl = doc.getElementById(ref[1]);
+          if (!clipPathEl || clipPathEl.tagName.toLowerCase() !== "clippath") {
+            warnings.push(`Elemen <${tag}>: referensi clip-path tidak ditemukan, diabaikan.`);
+          } else {
+            // objectBoundingBox on a GROUP clip is rare; approximate using a unit box
+            // (userSpaceOnUse is by far the common case and unaffected by this).
+            const localClip = resolveClipPathSubpaths(clipPathEl, { minX: 0, minY: 0, maxX: 1, maxY: 1 });
+            if (!localClip.length) {
+              warnings.push(`Elemen <${tag}>: clip-path kosong/tidak terbaca, diabaikan.`);
+            } else {
+              stack = stack.concat([transformSubpaths(localClip, matrix)]);
+            }
+          }
+        }
+        const maskRef = (el.getAttribute("mask") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+        if (maskRef) {
+          const maskEl = doc.getElementById(maskRef[1]);
+          if (!maskEl || maskEl.tagName.toLowerCase() !== "mask") {
+            warnings.push(`Elemen <${tag}>: referensi mask tidak ditemukan, diabaikan.`);
+          } else {
+            const ownGeom = collectPaintableGeometry(el, IDENTITY);
+            const bbox = ownGeom.length ? subpathsBBox(ownGeom.map((it) => it.subpaths)) : { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+            const localMask = resolveMaskSubpaths(maskEl, bbox);
+            if (!localMask.length) {
+              warnings.push(`Elemen <${tag}>: mask kosong/tidak terlihat, elemen disembunyikan.`);
+              stack = stack.concat([[]]); // an empty clip hides everything beneath, matching an all-transparent mask
+            } else {
+              stack = stack.concat([transformSubpaths(localMask, matrix)]);
+            }
+          }
+        }
+        return stack;
+      })();
+
+      if (tag === "use") {
+        if (useChain.length > 8) {
+          warnings.push("Rantai <use> terlalu dalam, sebagian dilewati.");
+          return;
+        }
+        const target = resolveUseTarget(el, doc);
+        if (!target) {
+          warnings.push("Elemen <use> dengan referensi tidak ditemukan dilewati.");
+          return;
+        }
+        const ux = num(el.getAttribute("x"), 0);
+        const uy = num(el.getAttribute("y"), 0);
+        const useM = mmul(matrix, mtranslate(ux, uy));
+        walk(target, useM, depth + 1, useChain.concat([target]), stackWithOwnClip);
+        return;
+      }
+
+      if (tag === "svg" || tag === "symbol") {
+        const vp = getViewport(el);
+        const innerX = num(el.getAttribute("x"), 0);
+        const innerY = num(el.getAttribute("y"), 0);
+        let m = mmul(matrix, mtranslate(innerX, innerY));
+        const dw = num(el.getAttribute("width"), vp.width);
+        const dh = num(el.getAttribute("height"), vp.height);
+        if (vp.width > 0 && vp.height > 0 && tag === "svg") {
+          const sx = dw / vp.width;
+          const sy = dh / vp.height;
+          m = mmul(m, mscale(sx, sy));
+        }
+        m = mmul(m, mtranslate(-vp.minX, -vp.minY));
+        for (const child of Array.from(el.children)) walk(child, m, depth + 1, useChain, stackWithOwnClip);
+        return;
+      }
+
+      if (tag === "g" || tag === "a" || tag === "switch") {
+        for (const child of Array.from(el.children)) walk(child, matrix, depth + 1, useChain, stackWithOwnClip);
+        return;
+      }
+
+      if (tag === "text") {
+        let producedTextAny = false;
+
+        const textPathEl = el.querySelector("textPath");
+        if (textPathEl) {
+          const href = textPathEl.getAttribute("href") || textPathEl.getAttributeNS(NS_XLINK, "href");
+          const refPathEl = href && href.startsWith("#") ? doc.getElementById(href.slice(1)) : null;
+          const refD = refPathEl ? localPathDFor(refPathEl) : null;
+          if (!refD) {
+            warnings.push("Elemen <textPath>: path acuan tidak ditemukan, teks dilewati.");
+          } else {
+            // Per spec, textPath geometry uses the referenced <path>'s OWN local coordinate
+            // system (its own ancestor transforms), not the <text> element's. Resolve that
+            // path's full accumulated matrix independently by walking its own ancestor chain.
+            let refMatrix = IDENTITY;
+            let anc = refPathEl.parentElement;
+            const chain = [];
+            while (anc && anc !== doc.documentElement) {
+              chain.unshift(anc);
+              anc = anc.parentElement;
+            }
+            for (const node of chain) refMatrix = mmul(refMatrix, elementOwnMatrix(node));
+            refMatrix = mmul(refMatrix, elementOwnMatrix(refPathEl));
+            // refMatrix maps the path's local d-coordinates into the SVG root's coordinate
+            // space; since our own `matrix` also maps into that same root space, using the
+            // flattened path directly in root space and emitting with an IDENTITY override
+            // keeps everything consistent regardless of where <text> itself sits in the tree.
+            const worldPathSubpaths = transformSubpaths(parsePathD(refD), refMatrix);
+            const flat = flattenForArcLength(worldPathSubpaths, 16);
+
+            const cs0 = getComputedStyle(el);
+            const font0 = cssFontString(cs0);
+            const fill0 = resolveFill(el);
+            const startOffsetRaw = (textPathEl.getAttribute("startOffset") || "0").trim();
+            const startOffset = startOffsetRaw.endsWith("%")
+              ? (parseFloat(startOffsetRaw) / 100) * flat.totalLength
+              : parseFloat(startOffsetRaw) || 0;
+            const textAlignMode = cs0.textAnchor || "start";
+            const textContent = textPathEl.textContent || "";
+
+            if (fill0 && flat.totalLength > 0) {
+              const finalAlpha0 = fill0.a * ancestorOpacity(el, svgEl) * (Number.isFinite(parseFloat(cs0.opacity)) ? parseFloat(cs0.opacity) : 1);
+              if (finalAlpha0 > 0.001) {
+                const tpSubpaths = textPathToFillSubpaths(textContent, font0, flat, startOffset, textAlignMode);
+                const label = `“${textContent.trim().slice(0, 24)}” (textPath)`;
+                if (emitShape(tpSubpaths, { r: fill0.r, g: fill0.g, b: fill0.b, a: finalAlpha0 }, label, IDENTITY)) {
+                  producedTextAny = true;
+                }
+              }
+            }
+          }
+          if (!producedTextAny) warnings.push("Elemen <textPath>: tidak ada isi yang terlihat.");
+          return;
+        }
+
+        const chunks = extractTextChunks(el);
+        for (const chunk of chunks) {
+          // Rough bbox estimate (for objectBoundingBox clip units only) using font-size as a stand-in.
+          let approxFontSize = 16;
+          if (chunk.runs[0]) approxFontSize = parseFloat(getComputedStyle(chunk.runs[0].styleEl).fontSize) || 16;
+
+          // Measure each run first (left-to-right cursor accumulation) to find the chunk's total width.
+          let cursorX = 0;
+          const measured = chunk.runs.map((run) => {
+            const cs2 = getComputedStyle(run.styleEl);
+            const font = cssFontString(cs2);
+            const probe = document.createElement("canvas").getContext("2d");
+            probe.font = font;
+            const w = probe.measureText(run.text).width;
+            const startX = cursorX;
+            cursorX += w;
+            return { run, cs: cs2, font, startX, width: w };
+          });
+          const totalWidth = cursorX;
+          let anchorShift = 0;
+          if (chunk.textAnchor === "middle") anchorShift = -totalWidth / 2;
+          else if (chunk.textAnchor === "end") anchorShift = -totalWidth;
+
+          // Clip-path/mask on <text> apply to the whole element; resolve once using an approximate bbox.
+          const approxTextBBox = {
+            minX: chunk.x + anchorShift, maxX: chunk.x + anchorShift + totalWidth,
+            minY: chunk.y - approxFontSize, maxY: chunk.y + approxFontSize * 0.3,
+          };
+          let chunkClip = null;
+          const clipRefT = (el.getAttribute("clip-path") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+          if (clipRefT) {
+            const clipPathElT = doc.getElementById(clipRefT[1]);
+            if (clipPathElT && clipPathElT.tagName.toLowerCase() === "clippath") {
+              const resolvedT = resolveClipPathSubpaths(clipPathElT, approxTextBBox);
+              if (resolvedT.length) chunkClip = resolvedT;
+            }
+          }
+          let chunkMask = null;
+          let chunkMaskHidesAll = false;
+          const maskRefT = (el.getAttribute("mask") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+          if (maskRefT) {
+            const maskElT = doc.getElementById(maskRefT[1]);
+            if (maskElT && maskElT.tagName.toLowerCase() === "mask") {
+              const resolvedM = resolveMaskSubpaths(maskElT, approxTextBBox);
+              if (resolvedM.length) chunkMask = resolvedM;
+              else chunkMaskHidesAll = true;
+            }
+          }
+          const applyClipT = (sp, rule) => {
+            if (chunkMaskHidesAll) return [];
+            let out = sp;
+            if (chunkClip) out = clipIntersectSubpaths(out, chunkClip, rule);
+            if (out.length && chunkMask) out = clipIntersectSubpaths(out, chunkMask, "nonzero");
+            return out;
+          };
+
+          // Group consecutive runs sharing the same resolved fill into one shape (typical case:
+          // a whole line/word in one color becomes a single, easily-editable AM shape).
+          let group = null; // {rgba, subpaths, textPreview}
+          const flushGroup = () => {
+            if (!group) return;
+            const clipped = applyClipT(group.subpaths, "nonzero");
+            const label = `“${group.textPreview}”`;
+            if (emitShape(clipped, group.rgba, label)) producedTextAny = true;
+            group = null;
+          };
+
+          for (const { run, cs: cs2, font, startX } of measured) {
+            const fill2 = resolveFill(run.styleEl);
+            const groupOpacity2 = ancestorOpacity(run.styleEl, svgEl);
+            const elOpacity2 = parseFloat(getComputedStyle(run.styleEl).opacity);
+            const opacityMul2 = groupOpacity2 * (Number.isFinite(elOpacity2) ? elOpacity2 : 1);
+            const originX = chunk.x + anchorShift + startX;
+            const originY = chunk.y + (run.dy || 0);
+
+            if (fill2) {
+              const finalAlpha2 = fill2.a * opacityMul2;
+              if (finalAlpha2 > 0.001) {
+                if (fill2.approximated === "gradient") {
+                  warnings.push(`Elemen <text>: gradasi didekati dengan warna solid dari stop pertama.`);
+                } else if (fill2.approximated === "pattern") {
+                  warnings.push(`Elemen <text>: isian pola didekati dengan warna rata-rata.`);
+                }
+                const { subpaths } = textRunToFillSubpaths(run.text, font, originX, originY, "left", "fill", null);
+                const rgba = { r: fill2.r, g: fill2.g, b: fill2.b, a: finalAlpha2 };
+                const sameAsGroup = group && group.rgba.r === rgba.r && group.rgba.g === rgba.g && group.rgba.b === rgba.b && Math.abs(group.rgba.a - rgba.a) < 0.01;
+                if (sameAsGroup) {
+                  group.subpaths = group.subpaths.concat(subpaths);
+                  group.textPreview = (group.textPreview + run.text).slice(0, 24);
+                } else {
+                  flushGroup();
+                  group = { rgba, subpaths, textPreview: run.text.trim().slice(0, 24) };
+                }
+              }
+            }
+
+            const strokePaint2 = resolveStrokePaint(run.styleEl, cs2);
+            if (strokePaint2) {
+              const strokeParams2 = resolveStrokeParams(run.styleEl, cs2);
+              const strokeAlpha2 = strokePaint2.a * opacityMul2;
+              if (strokeAlpha2 > 0.001 && strokeParams2.width > 0) {
+                const { subpaths: strokeSp } = textRunToFillSubpaths(run.text, font, originX, originY, "left", "stroke", strokeParams2);
+                const clippedStroke2 = applyClipT(strokeSp, "nonzero");
+                const label2 = `“${run.text.trim().slice(0, 24)}” (stroke)`;
+                if (emitShape(clippedStroke2, { r: strokePaint2.r, g: strokePaint2.g, b: strokePaint2.b, a: strokeAlpha2 }, label2)) {
+                  producedTextAny = true;
+                }
+              }
+            }
+          }
+          flushGroup();
+        }
+        if (!producedTextAny) {
+          warnings.push("Elemen <text>: tidak ada isi yang terlihat (periksa fill/stroke).");
+        }
+        return;
+      }
+      if (tag === "tspan") return; // only processed via extractTextChunks from the parent <text>
+      if (tag === "image") {
+        const cached = imageCache.get(el);
+        if (!cached || cached.error === "missing-href") {
+          warnings.push("Elemen <image> dilewati: tidak ada referensi gambar (href).");
+          return;
+        }
+        if (cached.error === "load-failed") {
+          warnings.push("Elemen <image> dilewati: gambar gagal dimuat (link rusak, atau URL eksternal diblokir CORS - coba unduh gambarnya dan sematkan sebagai data URI).");
+          return;
+        }
+        if (!cached.traced || !cached.traced.length) {
+          warnings.push("Elemen <image>: tidak ada warna yang bisa dideteksi (gambar kosong/transparan penuh), dilewati.");
+          return;
+        }
+
+        const ix = num(el.getAttribute("x"), 0);
+        const iy = num(el.getAttribute("y"), 0);
+        const iw = num(el.getAttribute("width"), cached.cw);
+        const ih = num(el.getAttribute("height"), cached.ch);
+        if (iw <= 0 || ih <= 0) return;
+
+        // preserveAspectRatio: support the common defaults (xMidYMid meet = fit centered) and
+        // "none" (stretch to exactly fill width/height); other alignments fall back to centered.
+        const parRaw = (el.getAttribute("preserveAspectRatio") || "xMidYMid meet").trim();
+        let sx, sy, ox = 0, oy = 0;
+        if (/\bnone\b/.test(parRaw)) {
+          sx = iw / cached.cw;
+          sy = ih / cached.ch;
+        } else {
+          const s = Math.min(iw / cached.cw, ih / cached.ch);
+          sx = sy = s;
+          ox = (iw - cached.cw * s) / 2;
+          oy = (ih - cached.ch * s) / 2;
+        }
+        const imgMatrix = mmul(mtranslate(ix + ox, iy + oy), mscale(sx, sy));
+
+        const cs = getComputedStyle(el);
+        const groupOpacity = ancestorOpacity(el, svgEl);
+        const elOpacity = parseFloat(cs.opacity);
+        const opacityMul = groupOpacity * (Number.isFinite(elOpacity) ? elOpacity : 1);
+        if (opacityMul <= 0.001) return;
+
+        let clipSubpathsLocalImg = null;
+        const clipRefImg = (el.getAttribute("clip-path") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+        if (clipRefImg) {
+          const clipPathElImg = doc.getElementById(clipRefImg[1]);
+          if (clipPathElImg && clipPathElImg.tagName.toLowerCase() === "clippath") {
+            const resolvedImg = resolveClipPathSubpaths(clipPathElImg, { minX: ix, minY: iy, maxX: ix + iw, maxY: iy + ih });
+            if (resolvedImg.length) clipSubpathsLocalImg = resolvedImg;
+          }
+        }
+
+        let producedImgAny = false;
+        for (const region of cached.traced) {
+          let sp = transformSubpaths(region.subpaths, imgMatrix);
+          if (clipSubpathsLocalImg) sp = clipIntersectSubpaths(sp, clipSubpathsLocalImg, "nonzero");
+          if (!sp.length) continue;
+          const label = el.getAttribute("id") || el.getAttribute("data-name") || `image ${autoIndex + 1}`;
+          const rgba = { r: region.rgba.r, g: region.rgba.g, b: region.rgba.b, a: region.rgba.a * opacityMul };
+          if (emitShape(sp, rgba, `${label} #${toHex2(region.rgba.r)}${toHex2(region.rgba.g)}${toHex2(region.rgba.b)}`)) {
+            producedImgAny = true;
+          }
+        }
+        if (!producedImgAny) {
+          warnings.push("Elemen <image>: tidak ada bagian yang terlihat setelah dipotong clip-path.");
+        } else {
+          warnings.push(`Elemen <image>: didekati sebagai ${cached.traced.length} bentuk warna datar (raster diposterisasi, bukan vektor asli).`);
+        }
+        return;
+      }
+
+      if (!DRAWABLE.has(tag)) {
+        // Unknown/unsupported element type: descend in case it has drawable children.
+        for (const child of Array.from(el.children || [])) walk(child, matrix, depth + 1, useChain, stackWithOwnClip);
+        return;
+      }
+
+      const dLocal = localPathDFor(el);
+      if (!dLocal) return;
+      const isLineEl = tag === "line";
+
+      const cs = getComputedStyle(el);
+      const groupOpacity = ancestorOpacity(el, svgEl);
+      const elOpacity = parseFloat(cs.opacity);
+      const opacityMul = groupOpacity * (Number.isFinite(elOpacity) ? elOpacity : 1);
+
+      // Resolve clip-path AND mask ONCE per element; both applied identically to fill+stroke.
+      let clipSubpathsLocal = null;
+      const clipRef = (el.getAttribute("clip-path") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+      if (clipRef) {
+        const clipPathEl = doc.getElementById(clipRef[1]);
+        if (clipPathEl && clipPathEl.tagName.toLowerCase() === "clippath") {
+          const targetBBox = subpathsBBox([parsePathD(dLocal)]);
+          const resolved = resolveClipPathSubpaths(clipPathEl, targetBBox);
+          if (resolved.length) {
+            clipSubpathsLocal = resolved;
+          } else {
+            warnings.push(`Elemen <${tag}>: clip-path kosong/tidak terbaca, diabaikan (bentuk penuh dipakai).`);
+          }
+        } else {
+          warnings.push(`Elemen <${tag}>: referensi clip-path tidak ditemukan, diabaikan (bentuk penuh dipakai).`);
+        }
+      }
+
+      let maskSubpathsLocal = null;
+      let maskHidesAll = false;
+      const maskRef = (el.getAttribute("mask") || "").match(/url\(\s*["']?#([^"')]+)["']?\s*\)/i);
+      if (maskRef) {
+        const maskEl = doc.getElementById(maskRef[1]);
+        if (maskEl && maskEl.tagName.toLowerCase() === "mask") {
+          const targetBBox = subpathsBBox([parsePathD(dLocal)]);
+          const resolved = resolveMaskSubpaths(maskEl, targetBBox);
+          if (resolved.length) {
+            maskSubpathsLocal = resolved;
+          } else {
+            warnings.push(`Elemen <${tag}>: mask kosong/tidak terlihat, elemen disembunyikan.`);
+            maskHidesAll = true;
+          }
+        } else {
+          warnings.push(`Elemen <${tag}>: referensi mask tidak ditemukan, diabaikan.`);
+        }
+      }
+
+      const applyClip = (subpathsLocal, fillRuleForClip) => {
+        if (maskHidesAll) return [];
+        let sp = subpathsLocal;
+        if (clipSubpathsLocal) sp = clipIntersectSubpaths(sp, clipSubpathsLocal, fillRuleForClip);
+        if (sp.length && maskSubpathsLocal) sp = clipIntersectSubpaths(sp, maskSubpathsLocal, "nonzero");
+        return sp;
+      };
+
+      let producedAny = false;
+      let hadSpecificWarning = false;
+
+      // ---- FILL ----
+      if (!isLineEl) {
+        const rawFillAttr = (cs.fill || "").trim();
+        const fill = resolveFill(el);
+        if (fill) {
+          const finalAlpha = fill.a * opacityMul;
+          if (finalAlpha > 0.001) {
+            if (fill.approximated === "gradient") {
+              warnings.push(`Elemen <${tag}>: gradasi didekati dengan warna solid dari stop pertama.`);
+            } else if (fill.approximated === "pattern") {
+              warnings.push(`Elemen <${tag}>: isian pola didekati dengan warna rata-rata.`);
+            }
+            const subpathsLocal = applyClip(parsePathD(dLocal), cs.fillRule);
+            const label = el.getAttribute("id") || el.getAttribute("data-name") || `${tag} ${autoIndex + 1}`;
+            if (emitShape(subpathsLocal, { r: fill.r, g: fill.g, b: fill.b, a: finalAlpha }, label)) {
+              producedAny = true;
+            }
+          }
+        } else if (rawFillAttr.startsWith("url(")) {
+          warnings.push(`Elemen <${tag}>: isian pola/gradien tanpa warna terbaca dilewati.`);
+          hadSpecificWarning = true;
+        }
+      }
+
+      // ---- STROKE ----
+      const strokePaint = resolveStrokePaint(el, cs);
+      if (strokePaint) {
+        const strokeParams = resolveStrokeParams(el, cs);
+        const strokeAlpha = strokePaint.a * opacityMul;
+        if (strokeAlpha > 0.001 && strokeParams.width > 0) {
+          if (strokePaint.approximated === "gradient") {
+            warnings.push(`Elemen <${tag}>: gradasi stroke didekati dengan warna solid dari stop pertama.`);
+          } else if (strokePaint.approximated === "pattern") {
+            warnings.push(`Elemen <${tag}>: isian pola stroke didekati dengan warna rata-rata.`);
+          }
+          const baseLabel = el.getAttribute("id") || el.getAttribute("data-name") || `${tag} ${autoIndex + (producedAny ? 0 : 1)}`;
+          const label = producedAny ? `${baseLabel} (stroke)` : baseLabel;
+
+          let clippedStroke, strokeMatrixOverride;
+          if (cs.vectorEffect === "non-scaling-stroke") {
+            // Stroke width must stay constant in world units regardless of this element's own
+            // scale: build the outline directly in world space (using the UN-scaled width),
+            // rather than the usual local-space-then-transform order.
+            const worldPath = transformSubpaths(parsePathD(dLocal), matrix);
+            const worldStroke = strokeToFillSubpaths(worldPath, strokeParams);
+            const worldClip = clipSubpathsLocal ? transformSubpaths(clipSubpathsLocal, matrix) : null;
+            const worldMask = maskSubpathsLocal ? transformSubpaths(maskSubpathsLocal, matrix) : null;
+            clippedStroke = maskHidesAll
+              ? []
+              : worldClip || worldMask
+              ? [worldClip, worldMask].filter(Boolean).reduce((sp, c) => (sp.length ? clipIntersectSubpaths(sp, c, "nonzero") : sp), worldStroke)
+              : worldStroke;
+            strokeMatrixOverride = IDENTITY;
+          } else {
+            const strokeOutlineLocal = strokeToFillSubpaths(parsePathD(dLocal), strokeParams);
+            clippedStroke = applyClip(strokeOutlineLocal, "nonzero");
+            strokeMatrixOverride = undefined;
+          }
+
+          if (emitShape(clippedStroke, { r: strokePaint.r, g: strokePaint.g, b: strokePaint.b, a: strokeAlpha }, label, strokeMatrixOverride)) {
+            producedAny = true;
+          }
+        }
+      }
+
+      if (!producedAny && !hadSpecificWarning) {
+        warnings.push(`Elemen <${tag}> tanpa fill atau stroke terlihat dilewati.`);
+      }
+    }
+
+    const rootVp = getViewport(svgEl);
+    const rootMatrix = mtranslate(-rootVp.minX, -rootVp.minY);
+    for (const child of Array.from(svgEl.children)) walk(child, rootMatrix, 0, [], []);
+
+    return { shapes: results, warnings, viewport: rootVp };
+  }
+
+  /* ===================== AM path `d` serialization ===================== */
+
+  function serializeSubpaths(subpaths) {
+    let out = "";
+    for (const sp of subpaths) {
+      for (const seg of sp) {
+        if (seg.type === "M") out += `M${fmtPath(seg.x)} ${fmtPath(seg.y)}`;
+        else if (seg.type === "L") out += `L${fmtPath(seg.x)} ${fmtPath(seg.y)}`;
+        else if (seg.type === "C")
+          out += `C${fmtPath(seg.x1)} ${fmtPath(seg.y1)} ${fmtPath(seg.x2)} ${fmtPath(
+            seg.y2
+          )} ${fmtPath(seg.x)} ${fmtPath(seg.y)}`;
+        else if (seg.type === "Z") out += "Z";
+      }
+    }
+    return out;
+  }
+
+  /* ===================== AM project XML assembly ===================== */
+
+  let idCounter = (Math.floor(Date.now() / 1000) % 90000000) + 10000000;
+  function nextId() {
+    return idCounter++;
+  }
+
+  function buildProjectXML(shapes, settings) {
+    const {
+      title = "SVG Import",
+      width = 1080,
+      height = 1080,
+      fps = 30,
+      totalTimeMs = 3000,
+      bgcolor = "#00000000",
+    } = settings;
+
+    const now = Date.now();
+    const header =
+      `<?xml version='1.0' encoding='UTF-8' ?><!--\n` +
+      `Created by Alight Motion (http://alightmotion.com)\n` +
+      `Exported: SVG-to-AlightMotion converter\n` +
+      `5.0.273.1028425 (1028425)\n` +
+      `-->\n`;
+
+    const sceneAttrs =
+      `title="${xmlEscape(title)}" width="${width}" height="${height}" ` +
+      `exportWidth="${width}" exportHeight="${height}" precompose="dynamicResolution" ` +
+      `bgcolor="${bgcolor}" totalTime="${Math.round(totalTimeMs)}" fps="${fps}" ` +
+      `modifiedTime="${now}" amver="1028425" ffver="106" ` +
+      `am="com.alightcreative.motion/5.0.273.1028425" amplatform="android" ` +
+      `retime="off" retimeAdaptFPS="false"`;
+
+    let body = "";
+    for (const shape of shapes) {
+      const id = nextId();
+      const a = toHex2(shape.fill.a * 255);
+      const r = toHex2(shape.fill.r);
+      const g = toHex2(shape.fill.g);
+      const b = toHex2(shape.fill.b);
+      const fillHex = `#${a}${r}${g}${b}`;
+      const d = serializeSubpaths(shape.subpaths);
+      const locX = fmtFixed6(shape.center.x);
+      const locY = fmtFixed6(shape.center.y);
+
+      body +=
+        `  <shape id="${id}" label="${xmlEscape(shape.label)}" startTime="0" endTime="${Math.round(
+          totalTimeMs
+        )}" fillType="color" mediaFillMode="fill">\n` +
+        `    <transform>\n` +
+        `      <location value="${locX},${locY},0.000000"/>\n` +
+        `    </transform>\n` +
+        `    <fillColor value="${fillHex}"/>\n` +
+        `    <path d="${xmlEscape(d)}"/>\n` +
+        `  </shape>\n`;
+    }
+
+    return `${header}<scene ${sceneAttrs}>\n${body}</scene>\n`;
+  }
+
+  return {
+    IDENTITY,
+    mmul,
+    mpoint,
+    mtranslate,
+    mscale,
+    mrotate,
+    mskewX,
+    mskewY,
+    parseTransformAttr,
+    parsePathD,
+    tokenizeCommands,
+    tokenizeArcArgs,
+    arcToCubicSegments,
+    SHAPE_CONVERTERS,
+    localPathDFor,
+    parseRgbString,
+    toHex2,
+    fmtFixed6,
+    fmtPath,
+    xmlEscape,
+    getViewport,
+    extractShapes,
+    serializeSubpaths,
+    buildProjectXML,
+  };
+})();
+
+if (typeof module !== "undefined") module.exports = AMEngine;
+
+
+</script>
+<script>
+(() => {
+  "use strict";
+
+  /* ---------- DOM refs ---------- */
+  const $ = (id) => document.getElementById(id);
+  const dropzone = $("dropzone");
+  const fileInput = $("fileInput");
+  const fileChip = $("fileChip");
+  const fileChipName = $("fileChipName");
+  const fileChipClear = $("fileChipClear");
+  const pasteToggle = $("pasteToggle");
+  const pastePanel = $("pastePanel");
+  const pasteArea = $("pasteArea");
+  const parseError = $("parseError");
+
+  const stagePreview = $("stagePreview");
+  const previewBox = $("previewBox");
+  const metaLine = $("metaLine");
+  const shapeCountEl = $("shapeCount");
+  const warnList = $("warnList");
+
+  const stageSettings = $("stageSettings");
+  const settingsToggle = $("settingsToggle");
+  const settingsBody = $("settingsBody");
+  const settingsCurrent = $("settingsCurrent");
+  const canvasChips = $("canvasChips");
+  const customCanvasFields = $("customCanvasFields");
+  const customW = $("customW");
+  const customH = $("customH");
+  const fitModeFields = $("fitModeFields");
+  const bgChips = $("bgChips");
+  const bgColor = $("bgColor");
+  const fpsChips = $("fpsChips");
+  const durationInput = $("durationInput");
+
+  const convertZone = $("convertZone");
+  const convertBtn = $("convertBtn");
+
+  const stageOutput = $("stageOutput");
+  const resultText = $("resultText");
+  const codeBox = $("codeBox");
+  const downloadBtn = $("downloadBtn");
+  const copyBtn = $("copyBtn");
+  const toast = $("toast");
+
+  const dotInput = $("dotInput"), dotPreview = $("dotPreview"), dotSettings = $("dotSettings"), dotOutput = $("dotOutput");
+
+  /* ---------- State ---------- */
+  let liveSvgEl = null;      // the parsed SVG element currently attached inside previewBox
+  let sourceLabel = "";      // filename or "SVG tempel" for the title/output filename
+  let lastExtraction = null; // {shapes, warnings, viewport}
+  let lastXml = "";
+
+  const settings = {
+    canvas: "native",   // native | square | story | custom
+    customW: 1080,
+    customH: 1080,
+    fit: "contain",     // contain | stretch
+    bg: "transparent",  // transparent | color
+    bgColor: "#ffffff",
+    fps: 30,
+    duration: 3,
+  };
+
+  /* ---------- Helpers ---------- */
+  function showToast(msg) {
+    toast.textContent = msg;
+    toast.classList.add("show");
+    clearTimeout(showToast._t);
+    showToast._t = setTimeout(() => toast.classList.remove("show"), 2200);
+  }
+
+  function setChipGroup(container, attr, value) {
+    container.querySelectorAll(".chip").forEach((chip) => {
+      const on = chip.dataset[attr] === String(value);
+      chip.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+  }
+
+  function canvasLabel() {
+    if (settings.canvas === "native") return "Ukuran asli SVG";
+    if (settings.canvas === "square") return "Persegi 1080";
+    if (settings.canvas === "story") return "Story 1080×1920";
+    return `Kustom ${settings.customW}×${settings.customH}`;
+  }
+  function updateSettingsSummary() {
+    const bg = settings.bg === "transparent" ? "transparan" : "latar warna";
+    settingsCurrent.textContent = `${canvasLabel()} · ${bg} · ${settings.fps}fps · ${settings.duration} detik`;
+  }
+
+  function targetCanvasSize() {
+    if (settings.canvas === "native" && lastExtraction) {
+      return { width: lastExtraction.viewport.width, height: lastExtraction.viewport.height };
+    }
+    if (settings.canvas === "square") return { width: 1080, height: 1080 };
+    if (settings.canvas === "story") return { width: 1080, height: 1920 };
+    if (settings.canvas === "custom") {
+      return {
+        width: Math.max(1, Math.round(Number(customW.value) || 1080)),
+        height: Math.max(1, Math.round(Number(customH.value) || 1080)),
+      };
+    }
+    return { width: 1080, height: 1080 };
+  }
+
+  /* ---------- XML syntax tint (display only) ---------- */
+  function highlightXml(xml) {
+    let s = AMEngine.xmlEscape(xml);
+    s = s.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span style="color:#7A8494">$1</span>');
+    s = s.replace(/(&lt;\/?)([a-zA-Z][\w:.-]*)/g, '$1<span class="tag">$2</span>');
+    s = s.replace(/([a-zA-Z_:][\w:.-]*)(=)(&quot;)([^&]*?)(&quot;)/g,
+      '<span class="attr">$1</span>$2$3<span class="str">$4</span>$5');
+    return s;
+  }
+
+  /* ---------- Core: (re)extract shapes from the live SVG using current settings ---------- */
+  let extractGeneration = 0;
+
+  async function reExtract() {
+    if (!liveSvgEl) return null;
+    const myGen = ++extractGeneration;
+    const nativeVp = AMEngine.getViewport(liveSvgEl);
+    let outerMatrix = AMEngine.IDENTITY;
+    let targetW = nativeVp.width, targetH = nativeVp.height;
+
+    if (settings.canvas !== "native") {
+      targetW = settings.canvas === "square" ? 1080 : settings.canvas === "story" ? 1080 : Math.max(1, Math.round(Number(customW.value) || 1080));
+      targetH = settings.canvas === "square" ? 1080 : settings.canvas === "story" ? 1920 : Math.max(1, Math.round(Number(customH.value) || 1080));
+      let sx, sy;
+      if (settings.fit === "stretch") {
+        sx = targetW / nativeVp.width;
+        sy = targetH / nativeVp.height;
+      } else {
+        const s = Math.min(targetW / nativeVp.width, targetH / nativeVp.height);
+        sx = sy = s;
+      }
+      const offX = (targetW - nativeVp.width * sx) / 2;
+      const offY = (targetH - nativeVp.height * sy) / 2;
+      outerMatrix = AMEngine.mmul(AMEngine.mtranslate(offX, offY), AMEngine.mscale(sx, sy));
+    }
+
+    // extractShapes already applies mtranslate(-minX,-minY) as its root matrix (native space).
+    // The extra canvas-fit matrix (when overriding canvas size) is applied afterward, directly
+    // to each shape's already-centered local geometry plus its center, then re-centered again.
+    const res = await AMEngine.extractShapes(liveSvgEl);
+    if (myGen !== extractGeneration) return null; // a newer extraction superseded this one
+
+    if (settings.canvas !== "native") {
+      res.shapes = res.shapes.map((shape) => {
+        const applyM = (seg) => {
+          if (seg.type === "Z") return seg;
+          if (seg.type === "C") {
+            const p1 = AMEngine.mpoint(outerMatrix, seg.x1 + shape.center.x, seg.y1 + shape.center.y);
+            const p2 = AMEngine.mpoint(outerMatrix, seg.x2 + shape.center.x, seg.y2 + shape.center.y);
+            const p = AMEngine.mpoint(outerMatrix, seg.x + shape.center.x, seg.y + shape.center.y);
+            return { type: "C", x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, x: p.x, y: p.y };
+          }
+          const p = AMEngine.mpoint(outerMatrix, seg.x + shape.center.x, seg.y + shape.center.y);
+          return { type: seg.type, x: p.x, y: p.y };
+        };
+        const absSubpaths = shape.subpaths.map((sp) => sp.map(applyM));
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const sp of absSubpaths) for (const seg of sp) {
+          if (seg.type === "Z") continue;
+          const xs = seg.type === "C" ? [seg.x1, seg.x2, seg.x] : [seg.x];
+          const ys = seg.type === "C" ? [seg.y1, seg.y2, seg.y] : [seg.y];
+          for (const x of xs) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+          for (const y of ys) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
+        }
+        const newCenter = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+        const centered = absSubpaths.map((sp) => sp.map((seg) => {
+          if (seg.type === "Z") return seg;
+          if (seg.type === "C") return { type: "C", x1: seg.x1 - newCenter.x, y1: seg.y1 - newCenter.y, x2: seg.x2 - newCenter.x, y2: seg.y2 - newCenter.y, x: seg.x - newCenter.x, y: seg.y - newCenter.y };
+          return { type: seg.type, x: seg.x - newCenter.x, y: seg.y - newCenter.y };
+        }));
+        return { ...shape, subpaths: centered, center: newCenter };
+      });
+    }
+
+    res.canvasWidth = targetW;
+    res.canvasHeight = targetH;
+    lastExtraction = res;
+    return res;
+  }
+
+  async function refreshPreviewMeta() {
+    metaLine.style.display = "flex";
+    shapeCountEl.textContent = "…";
+    const res = await reExtract();
+    if (!res) return; // superseded by a newer extraction, or no SVG loaded
+    metaLine.style.display = "flex";
+    shapeCountEl.textContent = String(res.shapes.length);
+
+    if (res.warnings.length) {
+      warnList.style.display = "flex";
+      warnList.innerHTML = res.warnings
+        .slice(0, 6)
+        .map(
+          (w) =>
+            `<li><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 1l7 13H1L8 1Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.5v3M8 11.5h.01" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg><span>${AMEngine.xmlEscape(w)}</span></li>`
+        )
+        .join("");
+    } else {
+      warnList.style.display = "none";
+      warnList.innerHTML = "";
+    }
+
+    convertBtn.disabled = res.shapes.length === 0;
+    dotPreview.classList.toggle("done", true);
+  }
+
+  /* ---------- Loading an SVG (from file or paste) ---------- */
+  function loadSvgText(text, label) {
+    parseError.style.display = "none";
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(text, "image/svg+xml");
+    } catch (e) {
+      showParseError("SVG tidak bisa dibaca. Periksa kembali kodenya.");
+      return;
+    }
+    const errNode = doc.querySelector("parsererror");
+    const root = doc.documentElement;
+    if (errNode || !root || root.tagName.toLowerCase() !== "svg") {
+      showParseError("SVG tidak bisa dibaca. Periksa kembali kodenya.");
+      return;
+    }
+
+    previewBox.innerHTML = "";
+    const imported = document.importNode(root, true);
+    imported.removeAttribute("width");
+    imported.removeAttribute("height");
+    imported.style.maxWidth = "100%";
+    imported.style.maxHeight = "14rem";
+    imported.style.width = "auto";
+    imported.style.height = "auto";
+    previewBox.appendChild(imported);
+    liveSvgEl = imported;
+    sourceLabel = label;
+
+    dotInput.classList.add("done");
+    stagePreview.style.display = "";
+    stageSettings.style.display = "";
+    convertZone.style.display = "";
+
+    const vp = AMEngine.getViewport(liveSvgEl);
+    if (Number.isFinite(vp.width) && Number.isFinite(vp.height)) {
+      customW.value = Math.round(vp.width);
+      customH.value = Math.round(vp.height);
+    }
+
+    refreshPreviewMeta();
+    stagePreview.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function showParseError(msg) {
+    parseError.textContent = msg;
+    parseError.style.display = "block";
+    stagePreview.style.display = "none";
+    stageSettings.style.display = "none";
+    convertZone.style.display = "none";
+    stageOutput.style.display = "none";
+    liveSvgEl = null;
+  }
+
+  function clearFile() {
+    fileInput.value = "";
+    fileChip.classList.remove("show");
+    previewBox.innerHTML = '<div class="preview-empty">Belum ada SVG</div>';
+    metaLine.style.display = "none";
+    warnList.style.display = "none";
+    parseError.style.display = "none";
+    stagePreview.style.display = "none";
+    stageSettings.style.display = "none";
+    convertZone.style.display = "none";
+    stageOutput.style.display = "none";
+    liveSvgEl = null;
+    lastExtraction = null;
+    dotInput.classList.remove("done");
+    dotPreview.classList.remove("done");
+  }
+
+  /* ---------- File input / drag&drop ---------- */
+  const RASTER_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)$/i;
+  const RASTER_MIME_RE = /^image\/(png|jpe?g|webp|gif|bmp)$/i;
+
+  function wrapRasterAsSvg(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth || 512;
+        const h = img.naturalHeight || 512;
+        resolve(
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><image href="${dataUrl}" x="0" y="0" width="${w}" height="${h}"/></svg>`
+        );
+      };
+      img.onerror = () => reject(new Error("image-decode-failed"));
+      img.src = dataUrl;
+    });
+  }
+
+  function handleIncomingFile(f) {
+    const isRaster = RASTER_EXT_RE.test(f.name) || RASTER_MIME_RE.test(f.type);
+    fileChipName.textContent = f.name;
+    fileChip.classList.add("show");
+
+    if (isRaster) {
+      const reader = new FileReader();
+      reader.onload = async () => {
+        try {
+          const svgWrapper = await wrapRasterAsSvg(String(reader.result));
+          loadSvgText(svgWrapper, f.name.replace(RASTER_EXT_RE, ""));
+        } catch (e) {
+          showParseError("Gambar tidak bisa dibaca. Coba file PNG/JPG lain.");
+        }
+      };
+      reader.onerror = () => showParseError("Gagal membaca file. Coba lagi.");
+      reader.readAsDataURL(f);
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => loadSvgText(String(reader.result), f.name.replace(/\.svg$/i, ""));
+    reader.onerror = () => showParseError("Gagal membaca file. Coba lagi.");
+    reader.readAsText(f);
+  }
+
+  fileInput.addEventListener("change", () => {
+    const f = fileInput.files && fileInput.files[0];
+    if (!f) return;
+    handleIncomingFile(f);
+  });
+
+  fileChipClear.addEventListener("click", (e) => {
+    e.preventDefault();
+    clearFile();
+  });
+
+  ["dragover", "dragenter"].forEach((evt) =>
+    dropzone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    })
+  );
+  ["dragleave", "dragend"].forEach((evt) =>
+    dropzone.addEventListener(evt, () => dropzone.classList.remove("dragover"))
+  );
+  dropzone.addEventListener("drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    const f = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (!f) return;
+    handleIncomingFile(f);
+  });
+
+  /* ---------- Paste panel ---------- */
+  pasteToggle.addEventListener("click", () => {
+    const open = pastePanel.classList.toggle("open");
+    pasteToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    if (open) pasteArea.focus();
+  });
+  let pasteDebounce;
+  pasteArea.addEventListener("input", () => {
+    clearTimeout(pasteDebounce);
+    pasteDebounce = setTimeout(() => {
+      const text = pasteArea.value.trim();
+      if (!text) return;
+      fileChip.classList.remove("show");
+      loadSvgText(text, "SVG_tempel");
+    }, 450);
+  });
+
+  /* ---------- Settings: chips ---------- */
+  canvasChips.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    settings.canvas = chip.dataset.canvas;
+    setChipGroup(canvasChips, "canvas", settings.canvas);
+    customCanvasFields.classList.toggle("show", settings.canvas === "custom");
+    fitModeFields.classList.toggle("show", settings.canvas !== "native");
+    updateSettingsSummary();
+    if (liveSvgEl) refreshPreviewMeta();
+  });
+  let customSizeDebounce;
+  function scheduleCustomSizeRefresh() {
+    clearTimeout(customSizeDebounce);
+    customSizeDebounce = setTimeout(() => { if (liveSvgEl) refreshPreviewMeta(); }, 400);
+  }
+  customW.addEventListener("input", scheduleCustomSizeRefresh);
+  customH.addEventListener("input", scheduleCustomSizeRefresh);
+
+  fitModeFields.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    settings.fit = chip.dataset.fit;
+    setChipGroup(fitModeFields, "fit", settings.fit);
+    if (liveSvgEl) refreshPreviewMeta();
+  });
+
+  bgChips.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    settings.bg = chip.dataset.bg;
+    setChipGroup(bgChips, "bg", settings.bg);
+    bgColor.style.display = settings.bg === "color" ? "inline-block" : "none";
+    updateSettingsSummary();
+  });
+  bgColor.addEventListener("input", () => { settings.bgColor = bgColor.value; });
+
+  fpsChips.addEventListener("click", (e) => {
+    const chip = e.target.closest(".chip");
+    if (!chip) return;
+    settings.fps = Number(chip.dataset.fps);
+    setChipGroup(fpsChips, "fps", settings.fps);
+    updateSettingsSummary();
+  });
+
+  durationInput.addEventListener("input", () => {
+    const v = Number(durationInput.value);
+    settings.duration = Number.isFinite(v) && v > 0 ? v : 3;
+    updateSettingsSummary();
+  });
+
+  settingsToggle.addEventListener("click", () => {
+    const open = settingsBody.classList.toggle("open");
+    settingsToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  });
+
+  /* ---------- Convert ---------- */
+  convertBtn.addEventListener("click", async () => {
+    if (!liveSvgEl) return;
+    const originalLabel = convertBtn.innerHTML;
+    convertBtn.disabled = true;
+    convertBtn.innerHTML = "Memproses…";
+    let res;
+    try {
+      res = await reExtract();
+    } finally {
+      convertBtn.disabled = false;
+      convertBtn.innerHTML = originalLabel;
+    }
+    if (!res || res.shapes.length === 0) {
+      showToast("Tidak ada bentuk dengan isi warna yang terdeteksi.");
+      return;
+    }
+    const bgHex =
+      settings.bg === "transparent"
+        ? "#00000000"
+        : "#ff" + settings.bgColor.replace("#", "").toLowerCase();
+
+    const xml = AMEngine.buildProjectXML(res.shapes, {
+      title: sourceLabel || "SVG Import",
+      width: res.canvasWidth,
+      height: res.canvasHeight,
+      fps: settings.fps,
+      totalTimeMs: Math.round(settings.duration * 1000),
+      bgcolor: bgHex,
+    });
+    lastXml = xml;
+
+    resultText.textContent = `Berhasil dikonversi: ${res.shapes.length} bentuk siap diekspor.`;
+    codeBox.innerHTML = highlightXml(xml);
+    stageOutput.style.display = "";
+    dotSettings.classList.add("done");
+    dotOutput.classList.add("done");
+    stageOutput.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  /* ---------- Download / copy ---------- */
+  downloadBtn.addEventListener("click", () => {
+    if (!lastXml) return;
+    const blob = new Blob([lastXml], { type: "application/xml" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const base = (sourceLabel || "Jalur_Import").replace(/[^\w.-]+/g, "_");
+    a.href = url;
+    a.download = base + ".xml";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    showToast("File XML diunduh.");
+  });
+
+  copyBtn.addEventListener("click", async () => {
+    if (!lastXml) return;
+    try {
+      await navigator.clipboard.writeText(lastXml);
+      showToast("XML disalin ke clipboard.");
+    } catch (e) {
+      const ta = document.createElement("textarea");
+      ta.value = lastXml;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        showToast("XML disalin ke clipboard.");
+      } catch (e2) {
+        showToast("Gagal menyalin. Coba unduh filenya.");
+      }
+      ta.remove();
+    }
+  });
+
+  /* ---------- init ---------- */
+  updateSettingsSummary();
+})();
+</script>
+</body>
+</html>
