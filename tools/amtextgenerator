@@ -1,0 +1,1482 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>AM Text Layer Generator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0A0C12;
+    --surface:#141824;
+    --surface-2:#1C2130;
+    --surface-3:#252B3D;
+    --line:#2A2F42;
+    --text-hi:#F3F5FA;
+    --text-lo:#8A90A8;
+    --text-dim:#565C72;
+    --accent:#FF3D71;
+    --accent-dim:#B92C52;
+    --accent-2:#00E5C7;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+    --safe-t: env(safe-area-inset-top, 0px);
+    --font-display:'Space Grotesk',sans-serif;
+    --font-body:'Inter',sans-serif;
+    --font-mono:'JetBrains Mono',monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;background:var(--ink);color:var(--text-hi);font-family:var(--font-body);}
+  body{
+    min-height:100vh;
+    padding-bottom:calc(96px + var(--safe-b));
+    background:
+      radial-gradient(circle at 15% 0%, rgba(255,61,113,0.10), transparent 45%),
+      radial-gradient(circle at 90% 8%, rgba(0,229,199,0.08), transparent 40%),
+      var(--ink);
+  }
+  ::selection{background:var(--accent);color:#fff;}
+  .app{max-width:520px;margin:0 auto;padding:calc(18px + var(--safe-t)) 16px 8px;}
+
+  /* ---------- header ---------- */
+  .topbar{padding:4px 2px 18px;}
+  .topbar-mark{
+    display:inline-flex;align-items:center;gap:6px;
+    font-family:var(--font-mono);font-size:11px;letter-spacing:.08em;
+    color:var(--accent);margin-bottom:10px;
+  }
+  .topbar-mark::before{content:'';width:7px;height:7px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 3px rgba(255,61,113,0.18);animation:pulse 1.8s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
+  .topbar h1{font-family:var(--font-display);font-size:22px;font-weight:700;margin:0 0 4px;letter-spacing:-0.01em;}
+  .topbar p{margin:0;color:var(--text-lo);font-size:13.5px;line-height:1.4;max-width:38ch;}
+
+  /* ---------- viewfinder ---------- */
+  .viewfinder-wrap{margin-bottom:14px;}
+  .viewfinder{
+    position:relative;border-radius:18px;overflow:hidden;
+    background:#000;
+    border:1px solid var(--line);
+    box-shadow:0 20px 50px -20px rgba(0,0,0,0.6);
+  }
+  .vf-canvas-holder{position:relative;width:100%;background:
+    repeating-conic-gradient(#15161c 0% 25%, #101115 0% 50%) 50% / 22px 22px;}
+  #previewCanvas{display:block;width:100%;height:auto;}
+  .vf-corner{position:absolute;width:22px;height:22px;pointer-events:none;opacity:.85;}
+  .vf-corner.tl{top:10px;left:10px;border-top:2.5px solid var(--accent-2);border-left:2.5px solid var(--accent-2);border-radius:4px 0 0 0;}
+  .vf-corner.tr{top:10px;right:10px;border-top:2.5px solid var(--accent-2);border-right:2.5px solid var(--accent-2);border-radius:0 4px 0 0;}
+  .vf-corner.bl{bottom:10px;left:10px;border-bottom:2.5px solid var(--accent-2);border-left:2.5px solid var(--accent-2);border-radius:0 0 0 4px;}
+  .vf-corner.br{bottom:10px;right:10px;border-bottom:2.5px solid var(--accent-2);border-right:2.5px solid var(--accent-2);border-radius:0 0 4px 0;}
+  .vf-timecode{
+    position:absolute;left:12px;bottom:12px;font-family:var(--font-mono);font-size:11px;
+    color:var(--text-hi);background:rgba(0,0,0,0.55);padding:4px 8px;border-radius:20px;
+    letter-spacing:.03em;backdrop-filter:blur(4px);
+  }
+  .vf-toolbar{position:absolute;top:10px;right:10px;display:flex;gap:6px;}
+  .vf-btn{
+    width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,0.15);
+    background:rgba(10,12,18,0.6);color:var(--text-hi);display:flex;align-items:center;justify-content:center;
+    font-size:14px;backdrop-filter:blur(4px);
+  }
+  .vf-btn.active{border-color:var(--accent-2);color:var(--accent-2);}
+  .vf-empty{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+    color:var(--text-dim);font-size:13px;font-family:var(--font-mono);text-align:center;padding:20px;}
+
+  /* ---------- character strip (signature element) ---------- */
+  .char-strip-wrap{margin-bottom:18px;}
+  .char-strip{display:flex;gap:7px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none;}
+  .char-strip::-webkit-scrollbar{display:none;}
+  .char-chip{
+    flex:0 0 auto;min-width:44px;border:1px solid var(--line);background:var(--surface);
+    border-radius:12px;padding:8px 6px 6px;text-align:center;position:relative;
+    opacity:0;transform:translateY(6px);animation:chipIn .45s ease forwards;
+  }
+  .char-chip.overridden{border-color:var(--accent-2);}
+  .char-chip.overridden::after{
+    content:'';position:absolute;top:5px;right:5px;width:6px;height:6px;
+    border-radius:50%;background:var(--accent-2);
+  }
+  @media (prefers-reduced-motion: reduce){.char-chip{animation:none;opacity:1;transform:none;}}
+  @keyframes chipIn{to{opacity:1;transform:translateY(0);}}
+  .char-chip .cc-char{font-family:var(--font-display);font-size:17px;font-weight:600;line-height:1;
+    display:block;margin-bottom:5px;}
+  .char-chip .cc-ms{font-family:var(--font-mono);font-size:9.5px;color:var(--accent-2);letter-spacing:.02em;}
+
+  /* ---------- tabs ---------- */
+  .tabbar{
+    display:flex;gap:5px;background:var(--surface);border:1px solid var(--line);
+    border-radius:14px;padding:5px;margin-bottom:12px;position:sticky;top:calc(6px + var(--safe-t));z-index:10;
+  }
+  .tabbar .tab{
+    flex:1;border:none;background:transparent;color:var(--text-lo);
+    font-family:var(--font-display);font-weight:600;font-size:13.5px;
+    padding:10px 6px;border-radius:10px;transition:background .15s ease,color .15s ease;
+  }
+  .tabbar .tab.active{background:var(--accent);color:#fff;}
+  .tab-panel[hidden]{display:none;}
+
+  /* ---------- cards ---------- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:14px 14px 15px;margin-bottom:10px;}
+  .card-label{display:block;font-size:12px;font-weight:600;color:var(--text-lo);
+    text-transform:uppercase;letter-spacing:.06em;margin-bottom:9px;}
+  .row-2{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:stretch;}
+
+  input[type=text]{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    color:var(--text-hi);font-family:var(--font-display);font-size:19px;font-weight:600;
+    padding:11px 13px;outline:none;
+  }
+  input[type=text]:focus{border-color:var(--accent-2);}
+
+  select{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    color:var(--text-hi);font-family:var(--font-body);font-size:15px;font-weight:500;
+    padding:11px 12px;outline:none;-webkit-appearance:none;appearance:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--text-lo) 50%),linear-gradient(135deg,var(--text-lo) 50%,transparent 50%);
+    background-position:calc(100% - 18px) center,calc(100% - 13px) center;background-size:5px 5px,5px 5px;background-repeat:no-repeat;
+  }
+  select:focus{border-color:var(--accent-2);}
+
+  #fontInput{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    color:var(--text-hi);font-family:var(--font-body);font-size:15px;font-weight:500;
+    padding:11px 12px;outline:none;
+  }
+  #fontInput:focus{border-color:var(--accent-2);}
+  #fontInput:disabled{color:var(--text-lo);}
+  .upload-row{
+    display:flex;align-items:center;justify-content:space-between;gap:8px;
+    margin-top:10px;padding:10px 12px;border:1px dashed var(--line);border-radius:11px;
+    font-size:12.5px;color:var(--text-lo);cursor:pointer;
+  }
+  .upload-row input[type=file]{
+    width:84px;font-size:11px;color:var(--text-lo);
+  }
+  .upload-row input[type=file]::file-selector-button{
+    background:var(--surface-3);border:1px solid var(--line);color:var(--text-hi);
+    border-radius:8px;padding:5px 9px;font-size:11px;font-family:var(--font-body);
+  }
+  .font-note{
+    margin-top:9px;font-size:11.5px;line-height:1.5;color:var(--accent-2);
+    background:rgba(0,229,199,0.08);border:1px solid rgba(0,229,199,0.25);
+    border-radius:10px;padding:9px 10px;
+  }
+  .font-note button{
+    background:none;border:none;color:var(--text-hi);text-decoration:underline;
+    font-family:var(--font-body);font-size:11.5px;padding:0;margin-top:4px;cursor:pointer;
+  }
+
+  .weight-toggle{display:flex;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;overflow:hidden;}
+  .weight-toggle button{
+    flex:1;border:none;background:transparent;color:var(--text-lo);font-family:var(--font-body);
+    font-size:13px;font-weight:600;padding:0 12px;min-width:64px;
+  }
+  .weight-toggle button.active{background:var(--accent);color:#fff;}
+  .weight-toggle button:disabled{opacity:.35;}
+
+  .slider-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:9px;}
+  .slider-val{font-family:var(--font-mono);font-size:13px;color:var(--accent-2);}
+
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:34px;background:transparent;margin:0;
+  }
+  input[type=range]::-webkit-slider-runnable-track{
+    height:6px;border-radius:4px;
+    background:linear-gradient(90deg,var(--accent) var(--fill,50%),var(--surface-3) var(--fill,50%));
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:#fff;
+    border:3px solid var(--accent);margin-top:-8px;box-shadow:0 2px 8px rgba(0,0,0,0.4);
+  }
+  input[type=range]::-moz-range-track{height:6px;border-radius:4px;background:var(--surface-3);}
+  input[type=range]::-moz-range-progress{height:6px;border-radius:4px;background:var(--accent);}
+  input[type=range]::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:#fff;border:3px solid var(--accent);}
+
+  .color-row{display:flex;align-items:center;gap:10px;}
+  input[type=color]{
+    -webkit-appearance:none;appearance:none;width:44px;height:44px;border-radius:12px;
+    border:1px solid var(--line);background:none;padding:0;flex:0 0 auto;
+  }
+  input[type=color]::-webkit-color-swatch-wrapper{padding:3px;}
+  input[type=color]::-webkit-color-swatch{border:none;border-radius:9px;}
+  .swatches{display:flex;gap:7px;flex-wrap:wrap;}
+  .swatch{width:26px;height:26px;border-radius:50%;border:2px solid var(--line);flex:0 0 auto;}
+  .swatch.active{border-color:var(--accent-2);}
+
+  .chip-scroll{display:flex;gap:8px;overflow-x:auto;padding:2px 2px 4px;margin:0 -2px;scrollbar-width:none;}
+  .chip-scroll::-webkit-scrollbar{display:none;}
+  .chip{
+    flex:0 0 auto;border:1px solid var(--line);background:var(--surface-2);color:var(--text-lo);
+    font-family:var(--font-body);font-size:13.5px;font-weight:600;padding:9px 15px;border-radius:20px;
+    white-space:nowrap;
+  }
+  .chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+  .chip .chip-idx{font-family:var(--font-mono);font-size:10px;opacity:.65;margin-right:5px;}
+
+  .howto{background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:4px 14px;margin:14px 0 6px;}
+  .xml-toggle-btn{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);border-radius:11px;
+    color:var(--text-hi);font-family:var(--font-body);font-weight:600;font-size:14px;padding:12px;
+  }
+  .xml-area{
+    width:100%;margin-top:10px;background:var(--surface-2);border:1px solid var(--line);
+    border-radius:11px;color:var(--accent-2);font-family:var(--font-mono);font-size:10.5px;
+    line-height:1.5;padding:10px;min-height:220px;resize:vertical;white-space:pre;
+  }
+  .howto summary{padding:12px 0;font-size:13.5px;font-weight:600;color:var(--text-hi);cursor:pointer;list-style:none;
+    display:flex;align-items:center;gap:8px;}
+  .howto summary::before{content:'▸';color:var(--accent-2);font-size:11px;transition:transform .2s;}
+  .howto[open] summary::before{transform:rotate(90deg);}
+  .howto ol{margin:0 0 14px;padding-left:20px;color:var(--text-lo);font-size:13px;line-height:1.6;}
+  .howto li{margin-bottom:6px;}
+  .howto .note{font-size:12px;color:var(--text-dim);border-top:1px solid var(--line);padding-top:10px;margin-top:2px;}
+
+  .action-bar{
+    position:fixed;left:0;right:0;bottom:0;padding:12px 16px calc(12px + var(--safe-b));
+    background:linear-gradient(180deg,transparent, var(--ink) 30%);
+    display:flex;gap:10px;max-width:520px;margin:0 auto;
+  }
+  .btn-primary,.btn-secondary{
+    flex:1;border:none;border-radius:14px;font-family:var(--font-display);font-weight:700;font-size:15px;
+    padding:15px 10px;text-align:center;text-decoration:none;display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .btn-primary{background:var(--accent);color:#fff;box-shadow:0 10px 24px -8px rgba(255,61,113,0.55);}
+  .btn-primary:active{transform:scale(0.98);}
+  .btn-secondary{background:var(--accent-2);color:#00201c;}
+  .btn-secondary:active{transform:scale(0.98);}
+
+  .toast{
+    position:fixed;left:50%;bottom:calc(92px + var(--safe-b));transform:translateX(-50%) translateY(10px);
+    background:var(--surface-3);border:1px solid var(--line);color:var(--text-hi);
+    padding:10px 16px;border-radius:12px;font-size:13px;opacity:0;pointer-events:none;transition:all .25s ease;
+    max-width:88%;text-align:center;z-index:50;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ---------- per-character override sheet ---------- */
+  .sheet-backdrop{
+    position:fixed;inset:0;background:rgba(4,5,9,0.6);z-index:60;
+    opacity:0;pointer-events:none;transition:opacity .22s ease;backdrop-filter:blur(2px);
+  }
+  .sheet-backdrop.show{opacity:1;pointer-events:auto;}
+  .char-sheet{
+    position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;
+    background:var(--surface);border:1px solid var(--line);border-bottom:none;
+    border-radius:20px 20px 0 0;z-index:61;padding:10px 18px calc(22px + var(--safe-b));
+    transform:translateY(100%);transition:transform .25s cubic-bezier(0.16,1,0.3,1);
+    max-height:78vh;overflow-y:auto;box-shadow:0 -20px 50px -15px rgba(0,0,0,0.5);
+  }
+  .char-sheet.show{transform:translateY(0);}
+  .sheet-handle{width:36px;height:4px;background:var(--line);border-radius:2px;margin:6px auto 16px;}
+  .sheet-header{display:flex;align-items:center;gap:10px;margin-bottom:18px;}
+  .sheet-char{
+    font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--accent-2);
+    width:40px;height:40px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;
+    background:var(--surface-2);border-radius:11px;border:1px solid var(--line);
+  }
+  .sheet-title{flex:1;font-size:13px;color:var(--text-lo);}
+  .sheet-close{
+    width:30px;height:30px;flex:0 0 auto;border-radius:50%;border:1px solid var(--line);
+    background:var(--surface-2);color:var(--text-hi);font-size:13px;
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="topbar-mark">●REC · AM XML ENGINE</div>
+    <h1>Text Layer Generator</h1>
+    <p>Per-karakter text animation untuk Alight Motion — font metrics asli, bukan spacing tebakan.</p>
+  </header>
+
+  <section class="viewfinder-wrap">
+    <div class="viewfinder">
+      <div class="vf-canvas-holder">
+        <canvas id="previewCanvas"></canvas>
+        <div class="vf-empty" id="vfEmpty">Ketik text di bawah<br>untuk mulai preview</div>
+      </div>
+      <div class="vf-corner tl"></div><div class="vf-corner tr"></div>
+      <div class="vf-corner bl"></div><div class="vf-corner br"></div>
+      <div class="vf-timecode" id="vfTimecode">00:00.00</div>
+      <div class="vf-toolbar">
+        <button class="vf-btn" id="guideBtn" aria-label="Toggle baseline guide" title="Baseline guide">▤</button>
+        <button class="vf-btn" id="replayBtn" aria-label="Putar ulang">↺</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="char-strip-wrap">
+    <div class="char-strip" id="charStrip"></div>
+  </section>
+
+  <div class="tabbar">
+    <button type="button" class="tab active" data-panel="text">Teks</button>
+    <button type="button" class="tab" data-panel="anim">Animasi</button>
+    <button type="button" class="tab" data-panel="export">Export</button>
+  </div>
+
+  <main class="controls">
+
+    <div class="tab-panel" data-panel="text">
+    <div class="card">
+      <label class="card-label" for="textInput">Text</label>
+      <input type="text" id="textInput" maxlength="60" placeholder="Add text" autocomplete="off" spellcheck="false" autocapitalize="off">
+    </div>
+
+    <div class="card">
+      <label class="card-label">Font</label>
+      <div class="row-2">
+        <input type="text" id="fontInput" list="fontDatalist" value="Poppins" autocomplete="off" spellcheck="false" placeholder="Nama Google Font...">
+        <div class="weight-toggle" id="weightToggle">
+          <button type="button" data-w="400" class="active">Regular</button>
+          <button type="button" data-w="700">Bold</button>
+        </div>
+      </div>
+      <datalist id="fontDatalist"></datalist>
+      <label class="upload-row" for="fontFileInput">
+        <span id="uploadLabel">📁 Upload font sendiri (.ttf / .otf / .woff)</span>
+        <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2">
+      </label>
+      <div class="font-note" id="fontCustomNote" style="display:none;"></div>
+    </div>
+
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="sizeSlider">Font Size</label><span class="slider-val" id="sizeVal">96px</span></div>
+      <input type="range" id="sizeSlider" min="24" max="200" value="96" step="1">
+    </div>
+
+    <div class="card">
+      <label class="card-label" for="colorInput">Color</label>
+      <div class="color-row">
+        <input type="color" id="colorInput" value="#ffffff">
+        <div class="swatches" id="swatches"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="spacingSlider">Letter Spacing</label><span class="slider-val" id="spacingVal">0px</span></div>
+      <input type="range" id="spacingSlider" min="-20" max="60" value="0" step="1">
+    </div>
+    </div>
+
+    <div class="tab-panel" data-panel="anim" hidden>
+    <div class="card">
+      <label class="card-label">Animasi Masuk <span style="color:var(--text-dim);text-transform:none;font-weight:500;">— 25 preset</span></label>
+      <div class="chip-scroll" id="presetChips"></div>
+    </div>
+
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="durationSlider">Animation Duration</label><span class="slider-val" id="durationVal">0.50s</span></div>
+      <input type="range" id="durationSlider" min="0.2" max="1.5" value="0.5" step="0.05">
+    </div>
+
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="delaySlider">Character Delay</label><span class="slider-val" id="delayVal">60ms</span></div>
+      <input type="range" id="delaySlider" min="0" max="200" value="60" step="5">
+    </div>
+
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="holdSlider">Tahan di Layar</label><span class="slider-val" id="holdVal">1.50s</span></div>
+      <input type="range" id="holdSlider" min="0.2" max="4" value="1.5" step="0.1">
+    </div>
+
+    <div class="card">
+      <label class="card-label">Animasi Keluar <span style="color:var(--text-dim);text-transform:none;font-weight:500;">— opsional</span></label>
+      <div class="chip-scroll" id="exitChips"></div>
+    </div>
+    </div>
+
+    <div class="tab-panel" data-panel="export" hidden>
+    <div class="card">
+      <div class="slider-row"><label class="card-label" for="fpsSlider">Frame Rate</label><span class="slider-val" id="fpsVal">30fps</span></div>
+      <input type="range" id="fpsSlider" min="30" max="60" value="30" step="1">
+    </div>
+
+    <div class="card">
+      <label class="card-label">Canvas</label>
+      <div class="chip-scroll" id="canvasChips">
+        <button type="button" class="chip active" data-w="1080" data-h="1080">Square · 1080×1080</button>
+        <button type="button" class="chip" data-w="1080" data-h="1920">Reels/Story · 1080×1920</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <button type="button" class="xml-toggle-btn" id="xmlViewBtn">👁 Lihat / edit XML mentah</button>
+      <div id="xmlViewWrap" style="display:none;">
+        <textarea id="xmlViewArea" class="xml-area" spellcheck="false"></textarea>
+        <div class="row-2" style="margin-top:8px;gap:8px;">
+          <button type="button" class="chip" id="xmlCopyBtn">Copy ke clipboard</button>
+          <button type="button" class="chip" id="xmlApplyBtn">Pakai versi editan ini</button>
+        </div>
+        <div class="font-note" style="margin-top:9px;">Generate dulu supaya ada XML. Kalau kamu edit manual di sini lalu tap "Pakai versi editan ini", tombol Share/Download akan pakai teks ini apa adanya (tidak dihitung ulang dari pengaturan di atas).</div>
+      </div>
+    </div>
+
+    <details class="howto" open>
+      <summary>Cara import ke Alight Motion</summary>
+      <ol>
+        <li>Tap <strong>Generate XML</strong>, lalu pilih <strong>Share</strong> (kalau muncul) atau <strong>Download XML</strong>.</li>
+        <li>Buka aplikasi <strong>Alight Motion</strong>, masuk ke project yang ingin ditambahkan text ini (atau buat project baru).</li>
+        <li>Buka tab <strong>Templates</strong> → tombol <strong>Upload/+</strong> → pilih file XML yang sudah didownload.</li>
+        <li>Alternatif: buka <strong>File Manager</strong> HP → cari file XML-nya → Share → pilih Alight Motion.</li>
+        <li>Layer per-karakter akan muncul di timeline, siap digeser/disesuaikan.</li>
+      </ol>
+      <div class="note">Catatan: <code>amver</code>/<code>ffver</code> pada XML diambil dari reference AM 3.7.0 (build 166) yang berhasil diverifikasi — versi paling baru yang bisa dipastikan dari dalam APK. Alight Motion pada umumnya backward-compatible dengan project lama, jadi ini pilihan paling aman yang bisa dipastikan tanpa mengarang angka.</div>
+    </details>
+    </div>
+
+  </main>
+
+</div>
+
+<div class="action-bar">
+  <button class="btn-primary" id="generateBtn">Generate XML</button>
+  <button class="btn-primary" id="shareBtn" style="display:none">📤 Share ke Alight Motion</button>
+  <a class="btn-secondary" id="downloadBtn" style="display:none" download>Download XML</a>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+<div class="char-sheet" id="charSheet" hidden>
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <span class="sheet-char" id="sheetChar">A</span>
+    <span class="sheet-title">Override karakter ini saja</span>
+    <button type="button" class="sheet-close" id="sheetClose">✕</button>
+  </div>
+  <div class="sheet-body">
+    <label class="card-label">Warna</label>
+    <div class="color-row">
+      <input type="color" id="sheetColorInput">
+      <div class="swatches" id="sheetSwatches"></div>
+    </div>
+    <button type="button" class="chip" id="sheetColorReset" style="margin-top:8px;">↺ Pakai warna global</button>
+
+    <label class="card-label" style="margin-top:16px;">Animasi masuk</label>
+    <div class="chip-scroll" id="sheetPresetChips"></div>
+    <button type="button" class="chip" id="sheetPresetReset" style="margin-top:8px;">↺ Pakai animasi global</button>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   1. FONT CATALOG  (googlefonts?name=X&weight=Y — verified format)
+   ========================================================= */
+const FONTS = [
+  { key:'poppins',        name:'Poppins',           weights:[400,700] },
+  { key:'montserrat',     name:'Montserrat',        weights:[400,700] },
+  { key:'inter',          name:'Inter',             weights:[400,700] },
+  { key:'roboto',         name:'Roboto',            weights:[400,700] },
+  { key:'robotomono',     name:'Roboto Mono',       weights:[400,700] },
+  { key:'archivoblack',   name:'Archivo Black',     weights:[400] },
+  { key:'anton',          name:'Anton',             weights:[400] },
+  { key:'bebasneue',      name:'Bebas Neue',        weights:[400] },
+  { key:'oswald',         name:'Oswald',            weights:[400,700] },
+  { key:'playfair',       name:'Playfair Display',  weights:[400,700] },
+  { key:'caveat',         name:'Caveat',            weights:[400,700] },
+  { key:'pacifico',       name:'Pacifico',          weights:[400] },
+  { key:'permanentmarker',name:'Permanent Marker',  weights:[400] },
+  { key:'righteous',      name:'Righteous',         weights:[400] },
+];
+const SWATCH_COLORS = ['#ffffff','#0a0c12','#FF3D71','#00E5C7','#FFD23F','#3D5AFE'];
+
+/* Calibrated against a confirmed real-device round trip on AM 5.0.273: a layer
+   generated with size=189 (position/wrapWidth measured for a true 189px glyph)
+   only rendered at that intended size once size was manually corrected to 72 in
+   AM's own editor. 72/189 ≈ 0.380952 — applied ONLY when serializing the XML
+   `size` attribute; all measurement/layout keeps using the true on-screen size. */
+const AM_SIZE_RENDER_FACTOR = 72/189;
+
+/* =========================================================
+   2. ANIMATION PRESETS
+   Built ONLY from verified com.alightcreative.effects.transform
+   properties: alpha(float) / offset(vec2) / scale(float) / angle(float)
+   kf.t below is expressed RELATIVE TO THE ENTRANCE ITSELF (0..~1);
+   it gets rescaled into each layer's normalized duration at build time.
+   ========================================================= */
+const EASE = {
+  out:    '0.215 0.61 0.355 1',
+  in:     '0.55 0.055 0.675 0.19',
+  inOut:  '0.42 0 0.58 1',
+  outBack:'0.34 1.56 0.64 1'
+};
+function kf(t,v,easeKey){ return { t:t, v:v, e: easeKey ? EASE[easeKey] : null }; }
+
+const PRESET_LIST = [
+  'fadeIn','fadeUp','fadeDown','fadeLeft','fadeRight',
+  'slideUp','slideDown','slideLeft','slideRight',
+  'scaleIn','scaleDown','pop','bounce','elastic',
+  'rotateIn','zoomIn','softReveal','wave','randomStagger','typewriter',
+  'spiralIn','glitchIn','overshootSpin','dropImpact','orbitSettle'
+];
+const PRESET_LABELS = {
+  fadeIn:'Fade In', fadeUp:'Fade Up', fadeDown:'Fade Down', fadeLeft:'Fade Left', fadeRight:'Fade Right',
+  slideUp:'Slide Up', slideDown:'Slide Down', slideLeft:'Slide Left', slideRight:'Slide Right',
+  scaleIn:'Scale In', scaleDown:'Scale Down', pop:'Pop', bounce:'Bounce', elastic:'Elastic',
+  rotateIn:'Rotate In', zoomIn:'Zoom In', softReveal:'Soft Reveal', wave:'Wave',
+  randomStagger:'Random Stagger', typewriter:'Typewriter',
+  spiralIn:'Spiral In', glitchIn:'Glitch In', overshootSpin:'Overshoot Spin',
+  dropImpact:'Drop Impact', orbitSettle:'Orbit Settle'
+};
+
+const EXIT_PRESET_LIST = ['none','fadeOut','slideOutUp','slideOutDown','slideOutLeft','slideOutRight','scaleOut','zoomOut','rotateOut'];
+const EXIT_PRESET_LABELS = {
+  none:'Tetap (tanpa keluar)', fadeOut:'Fade Out', slideOutUp:'Slide Out Up', slideOutDown:'Slide Out Down',
+  slideOutLeft:'Slide Out Left', slideOutRight:'Slide Out Right', scaleOut:'Scale Out', zoomOut:'Zoom Out', rotateOut:'Rotate Out'
+};
+function buildExitAnim(key, s){
+  switch(key){
+    case 'none': return {};
+    case 'fadeOut': return { alpha:[kf(0,1),kf(1,0,'inOut')] };
+    case 'slideOutUp': return { alpha:[kf(0,1),kf(1,0,'in')], offset:[kf(0,[0,0]),kf(1,[0,-s*1.4],'in')] };
+    case 'slideOutDown': return { alpha:[kf(0,1),kf(1,0,'in')], offset:[kf(0,[0,0]),kf(1,[0,s*1.4],'in')] };
+    case 'slideOutLeft': return { alpha:[kf(0,1),kf(1,0,'in')], offset:[kf(0,[0,0]),kf(1,[-s*1.4,0],'in')] };
+    case 'slideOutRight': return { alpha:[kf(0,1),kf(1,0,'in')], offset:[kf(0,[0,0]),kf(1,[s*1.4,0],'in')] };
+    case 'scaleOut': return { alpha:[kf(0,1),kf(1,0,'in')], scale:[kf(0,1),kf(1,0,'in')] };
+    case 'zoomOut': return { alpha:[kf(0,1),kf(1,0,'in')], scale:[kf(0,1),kf(1,2.8,'in')] };
+    case 'rotateOut': return { alpha:[kf(0,1),kf(1,0,'inOut')], angle:[kf(0,0),kf(1,26,'in')] };
+    default: return { alpha:[kf(0,1),kf(1,0,'inOut')] };
+  }
+}
+
+function buildPresetAnim(key, s /* fontSizePx, magnitudes scale with it */){
+  switch(key){
+    case 'fadeIn': return {
+      alpha:[kf(0,0),kf(0.45,1,'inOut')]
+    };
+    case 'fadeUp': return {
+      alpha:[kf(0,0),kf(0.4,1,'inOut')],
+      offset:[kf(0,[0, s*0.6]),kf(0.5,[0,0],'out')]
+    };
+    case 'fadeDown': return {
+      alpha:[kf(0,0),kf(0.4,1,'inOut')],
+      offset:[kf(0,[0,-s*0.6]),kf(0.5,[0,0],'out')]
+    };
+    case 'fadeLeft': return {
+      alpha:[kf(0,0),kf(0.4,1,'inOut')],
+      offset:[kf(0,[-s*0.7,0]),kf(0.5,[0,0],'out')]
+    };
+    case 'fadeRight': return {
+      alpha:[kf(0,0),kf(0.4,1,'inOut')],
+      offset:[kf(0,[s*0.7,0]),kf(0.5,[0,0],'out')]
+    };
+    case 'slideUp': return {
+      offset:[kf(0,[0, s*1.4]),kf(0.55,[0,0],'out')]
+    };
+    case 'slideDown': return {
+      offset:[kf(0,[0,-s*1.4]),kf(0.55,[0,0],'out')]
+    };
+    case 'slideLeft': return {
+      offset:[kf(0,[-s*1.5,0]),kf(0.55,[0,0],'out')]
+    };
+    case 'slideRight': return {
+      offset:[kf(0,[s*1.5,0]),kf(0.55,[0,0],'out')]
+    };
+    case 'scaleIn': return {
+      alpha:[kf(0,0),kf(0.25,1)],
+      scale:[kf(0,0),kf(0.45,1,'out')]
+    };
+    case 'scaleDown': return {
+      alpha:[kf(0,0),kf(0.2,1)],
+      scale:[kf(0,1.8),kf(0.4,1,'out')]
+    };
+    case 'pop': return {
+      alpha:[kf(0,0),kf(0.12,1)],
+      scale:[kf(0,0),kf(0.3,1.18,'out'),kf(0.5,1,'inOut')]
+    };
+    case 'bounce': return {
+      alpha:[kf(0,0),kf(0.1,1)],
+      offset:[
+        kf(0,[0,s*1.2]),
+        kf(0.45,[0,-s*0.1],'out'),
+        kf(0.75,[0,s*0.03],'inOut'),
+        kf(1.0,[0,0],'inOut')
+      ]
+    };
+    case 'elastic': return {
+      alpha:[kf(0,0),kf(0.08,1)],
+      scale:[
+        kf(0,0),
+        kf(0.4,1.25,'out'),
+        kf(0.7,0.93,'inOut'),
+        kf(1.0,1,'inOut')
+      ]
+    };
+    case 'rotateIn': return {
+      alpha:[kf(0,0),kf(0.35,1,'inOut')],
+      angle:[kf(0,-24),kf(0.5,0,'out')]
+    };
+    case 'zoomIn': return {
+      alpha:[kf(0,0),kf(0.18,1)],
+      scale:[kf(0,3.4),kf(0.4,1,'out')]
+    };
+    case 'softReveal': return {
+      alpha:[kf(0,0),kf(0.75,1,'inOut')],
+      offset:[kf(0,[0,s*0.18]),kf(0.8,[0,0],'inOut')]
+    };
+    case 'wave': return {
+      alpha:[kf(0,0),kf(0.15,1)],
+      offset:[
+        kf(0,[0,0]),
+        kf(0.28,[0,-s*0.35],'inOut'),
+        kf(0.56,[0,0],'inOut'),
+        kf(0.78,[0,s*0.15],'inOut'),
+        kf(1.0,[0,0],'inOut')
+      ]
+    };
+    case 'randomStagger': return {
+      alpha:[kf(0,0),kf(0.35,1,'inOut')],
+      scale:[kf(0,0.5),kf(0.4,1,'outBack')]
+    };
+    case 'typewriter': return {
+      alpha:[kf(0,0),kf(0.06,1)]
+    };
+    case 'spiralIn': return {
+      alpha:[kf(0,0),kf(0.3,1,'out')],
+      scale:[kf(0,0),kf(0.55,1.12,'out'),kf(1.0,1,'inOut')],
+      angle:[kf(0,-560),kf(0.6,12,'out'),kf(1.0,0,'inOut')]
+    };
+    case 'glitchIn': return {
+      alpha:[kf(0,0),kf(0.12,1),kf(0.22,0.15),kf(0.3,1),kf(0.42,0.3),kf(0.55,1,'inOut')],
+      offset:[
+        kf(0,[s*0.5,0]),
+        kf(0.15,[-s*0.35,s*0.08]),
+        kf(0.28,[s*0.22,-s*0.05]),
+        kf(0.4,[-s*0.1,0]),
+        kf(0.55,[0,0],'out')
+      ]
+    };
+    case 'overshootSpin': return {
+      alpha:[kf(0,0),kf(0.15,1)],
+      scale:[kf(0,0.6),kf(0.4,1.1,'out'),kf(0.65,0.93,'inOut'),kf(1.0,1,'inOut')],
+      angle:[kf(0,-55),kf(0.45,16,'out'),kf(0.75,-6,'inOut'),kf(1.0,0,'inOut')]
+    };
+    case 'dropImpact': return {
+      alpha:[kf(0,0),kf(0.15,1)],
+      offset:[kf(0,[0,-s*2.2]),kf(0.5,[0,0],'in')],
+      scale:[kf(0,1),kf(0.5,1),kf(0.72,0.87,'out'),kf(1.0,1,'inOut')],
+      angle:[kf(0,0),kf(0.5,0),kf(0.74,-3,'out'),kf(1.0,2,'inOut')]
+    };
+    case 'orbitSettle': return {
+      alpha:[kf(0,0),kf(0.25,1)],
+      offset:[
+        kf(0,[s*1.6,-s*0.9]),
+        kf(0.4,[s*0.5,-s*1.3],'out'),
+        kf(0.7,[-s*0.15,-s*0.2],'inOut'),
+        kf(1.0,[0,0],'inOut')
+      ],
+      angle:[kf(0,35),kf(0.7,-6,'out'),kf(1.0,0,'inOut')],
+      scale:[kf(0,0.5),kf(0.6,1.05,'out'),kf(1.0,1,'inOut')]
+    };
+    default: return { alpha:[kf(0,0),kf(0.4,1,'inOut')] };
+  }
+}
+
+/* =========================================================
+   3. STATE
+   ========================================================= */
+const state = {
+  text:'', fontFamily:'Poppins', weight:400, size:96, color:'#ffffff',
+  spacing:0, presetKey:'fadeUp', exitPresetKey:'none', duration:0.5, delay:60, holdDuration:1.5,
+  canvasW:1080, canvasH:1080, guides:false, fps:30,
+  customFontActive:false, customFontLabel:null, charOverrides:{}
+};
+let randomCache = { sig:null, order:null };
+let computedLayers = [];
+let sceneTotalMs = 0;
+let fontsReady = false;
+
+/* =========================================================
+   4. TEXT / METRICS ENGINE  (shared by preview + XML)
+   ========================================================= */
+function splitGraphemes(text){
+  if (typeof Intl !== 'undefined' && Intl.Segmenter){
+    try{
+      const seg = new Intl.Segmenter(undefined,{granularity:'grapheme'});
+      return Array.from(seg.segment(text), s=>s.segment);
+    }catch(e){ /* fall through */ }
+  }
+  return Array.from(text);
+}
+function isSpaceChar(ch){ return /^\s$/.test(ch); }
+
+function getStableOrder(n, presetKey, sig){
+  if (presetKey !== 'randomStagger'){
+    return Array.from({length:n},(_,i)=>i);
+  }
+  if (randomCache.sig === sig && randomCache.order && randomCache.order.length === n){
+    return randomCache.order;
+  }
+  const order = Array.from({length:n},(_,i)=>i);
+  for (let i=order.length-1;i>0;i--){
+    const j = Math.floor(Math.random()*(i+1));
+    const tmp = order[i]; order[i]=order[j]; order[j]=tmp;
+  }
+  randomCache = { sig:sig, order:order };
+  return order;
+}
+
+function recompute(ctx){
+  const fontCSS = state.weight + ' ' + state.size + 'px "' + state.fontFamily + '"';
+  ctx.font = fontCSS;
+  ctx.textBaseline = 'alphabetic';
+
+  const chars = splitGraphemes(state.text);
+  let cursor = 0;
+  const raw = [];
+  for (let idx=0; idx<chars.length; idx++){
+    const ch = chars[idx];
+    const m = ctx.measureText(ch);
+    const advance = m.width || state.size*0.5;
+    const left = (typeof m.actualBoundingBoxLeft === 'number') ? m.actualBoundingBoxLeft : advance*0.06;
+    const right = (typeof m.actualBoundingBoxRight === 'number') ? m.actualBoundingBoxRight : advance*0.94;
+    const ascent = (typeof m.actualBoundingBoxAscent === 'number' && m.actualBoundingBoxAscent>0) ? m.actualBoundingBoxAscent : state.size*0.74;
+    const descent = (typeof m.actualBoundingBoxDescent === 'number') ? m.actualBoundingBoxDescent : state.size*0.2;
+    raw.push({
+      ch:ch, center:cursor + advance/2, advance:advance,
+      glyphW: Math.max(left+right, advance*0.3, 2),
+      ascent:ascent, descent:descent, isSpace:isSpaceChar(ch)
+    });
+    cursor += advance + state.spacing;
+  }
+  const totalWidth = Math.max(cursor - state.spacing, 0);
+  let maxAscent = state.size*0.7, maxDescent = state.size*0.2;
+  raw.forEach(r=>{ if(r.ascent>maxAscent) maxAscent=r.ascent; if(r.descent>maxDescent) maxDescent=r.descent; });
+
+  const startX = state.canvasW/2 - totalWidth/2;
+  const baselineY = state.canvasH/2 + (maxAscent - maxDescent)/2;
+
+  const visible = raw.filter(r=>!r.isSpace);
+  const n = visible.length;
+  const sig = state.text+'|'+state.presetKey+'|'+n;
+  const order = getStableOrder(n, state.presetKey, sig);
+
+  const entranceMs = Math.max(state.duration*1000, 40);
+  const delayMs = state.delay;
+  const startTimes = visible.map((_,i)=> order[i]*delayMs);
+  const lastEnter = n ? Math.max.apply(null, startTimes) + entranceMs : entranceMs;
+  const holdMs = Math.max(state.holdDuration*1000, 0);
+  const holdEnd = lastEnter + holdMs;
+  const exitActive = state.exitPresetKey && state.exitPresetKey !== 'none';
+  const exitMs = exitActive ? entranceMs : 0;
+  const sceneEnd = holdEnd + exitMs + (exitActive ? 0 : 200);
+
+  computedLayers = visible.map((r,i)=>{
+    const layerStart = startTimes[i];
+    const layerEnd = sceneEnd;
+    const layerDur = Math.max(layerEnd - layerStart, 1);
+    const entranceFrac = Math.min(entranceMs/layerDur, 1);
+    const exitStartFrac = Math.min(Math.max((holdEnd - layerStart)/layerDur, entranceFrac), 1);
+    const exitDurFrac = Math.max(1 - exitStartFrac, 0);
+    const override = state.charOverrides[i] || {};
+    const effectivePresetKey = override.presetKey || state.presetKey;
+    const effectiveColor = override.color || state.color;
+    const entranceAnim = buildPresetAnim(effectivePresetKey, state.size);
+    const exitAnim = exitActive ? buildExitAnim(state.exitPresetKey, state.size) : {};
+    const rescaled = {};
+    ['alpha','offset','scale','angle'].forEach(function(prop){
+      const parts = [];
+      if (entranceAnim[prop]){
+        entranceAnim[prop].forEach(function(k){ parts.push({ t:k.t*entranceFrac, v:k.v, e:k.e }); });
+      }
+      if (exitActive && exitAnim[prop]){
+        exitAnim[prop].forEach(function(k){ parts.push({ t: exitStartFrac + k.t*exitDurFrac, v:k.v, e:k.e }); });
+      }
+      if (parts.length) rescaled[prop] = parts;
+    });
+    const wrapWidthPx = r.glyphW*1.15 + Math.max(state.size*0.04, 4);
+    return {
+      char:r.ch, x:startX + r.center, y:baselineY,
+      wrapWidth: wrapWidthPx,
+      startMs:layerStart, endMs:layerEnd, anim:rescaled,
+      fontFamily:state.fontFamily,
+      xmlFontName: state.customFontActive ? 'Poppins' : state.fontFamily,
+      weight:state.weight, size:state.size, color:effectiveColor,
+      overridden: !!(override.presetKey || override.color),
+      ascent:maxAscent, descent:maxDescent
+    };
+  });
+  sceneTotalMs = sceneEnd;
+  return { startTimes:startTimes, order:order, baselineY:baselineY, maxAscent:maxAscent, maxDescent:maxDescent, startX:startX, totalWidth:totalWidth };
+}
+
+/* =========================================================
+   5. CUBIC-BEZIER EASING (matches AM's e="cubicBezier x1 y1 x2 y2")
+   ========================================================= */
+function bez(t,p1,p2){ const mt=1-t; return 3*mt*mt*t*p1 + 3*mt*t*t*p2 + t*t*t; }
+function cubicBezierY(x1,y1,x2,y2,x){
+  if (x<=0) return 0; if (x>=1) return 1;
+  let t0=0,t1=1,t=x;
+  for (let i=0;i<20;i++){
+    const xt = bez(t,x1,x2);
+    if (Math.abs(xt-x) < 0.0005) break;
+    if (xt < x) t0 = t; else t1 = t;
+    t = (t0+t1)/2;
+  }
+  return bez(t,y1,y2);
+}
+function evalProp(kfList, localT){
+  if (!kfList || !kfList.length) return null;
+  if (localT <= kfList[0].t) return kfList[0].v;
+  const last = kfList[kfList.length-1];
+  if (localT >= last.t) return last.v;
+  for (let i=1;i<kfList.length;i++){
+    const b = kfList[i];
+    if (localT <= b.t){
+      const a = kfList[i-1];
+      const span = (b.t - a.t) || 1e-6;
+      let p = (localT - a.t)/span;
+      if (b.e){
+        const parts = b.e.split(' ').map(Number);
+        p = cubicBezierY(parts[0],parts[1],parts[2],parts[3],p);
+      }
+      if (Array.isArray(a.v)){
+        return [ a.v[0]+(b.v[0]-a.v[0])*p, a.v[1]+(b.v[1]-a.v[1])*p ];
+      }
+      return a.v + (b.v-a.v)*p;
+    }
+  }
+  return last.v;
+}
+
+/* =========================================================
+   6. XML BUILDER  (verified Alight Motion schema)
+   ========================================================= */
+function fmt(n){ return Number(n).toFixed(6); }
+function escXML(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function escAttr(s){ return escXML(s).replace(/"/g,'&quot;'); }
+
+function buildPropertyXML(name,type,kfArr){
+  if (!kfArr || !kfArr.length) return '';
+  const lines = kfArr.map(function(k){
+    const vStr = Array.isArray(k.v) ? (fmt(k.v[0])+','+fmt(k.v[1])) : fmt(k.v);
+    const eStr = k.e ? (' e="cubicBezier '+k.e+'"') : '';
+    return '        <kf t="'+fmt(k.t)+'" v="'+vStr+'"'+eStr+'/>';
+  }).join('\n');
+  return '      <property name="'+name+'" type="'+type+'">\n'+lines+'\n      </property>\n';
+}
+
+function buildCharLayerXML(L, id){
+  const types = {alpha:'float',offset:'vec2',scale:'float',angle:'float'};
+  let propsXML = '';
+  ['alpha','offset','scale','angle'].forEach(function(p){
+    if (L.anim[p] && L.anim[p].length) propsXML += buildPropertyXML(p, types[p], L.anim[p]);
+  });
+  let effectXML = '';
+  if (propsXML){
+    effectXML = '    <effect id="com.alightcreative.effects.transform" locallyApplied="true">\n'+propsXML+'    </effect>\n';
+  }
+  const argb = '#FF' + L.color.replace('#','').toUpperCase();
+  const fontAttr = 'googlefonts?name='+escAttr(L.xmlFontName)+'&amp;weight='+L.weight;
+  // AM_SIZE_RENDER_FACTOR: calibrated from a confirmed real-device round-trip
+  // (generator wrote size=189, positions/wrapWidth measured for a true 189px glyph;
+  // only after the person manually set the AM in-app size field to 72 did the
+  // render match that intended 189px layout). Position/wrapWidth stay based on the
+  // true on-screen size (L.size); only the serialized `size` attribute is corrected.
+  const xmlSize = L.size * AM_SIZE_RENDER_FACTOR;
+  return '  <text id="'+id+'" label="'+escAttr(L.char)+'" startTime="'+Math.round(L.startMs)+'" endTime="'+Math.round(L.endMs)+
+    '" fillType="color" mediaFillMode="stretch" size="'+fmt(xmlSize)+'" font="'+fontAttr+'" wrapWidth="'+fmt(L.wrapWidth)+'" align="center">\n'+
+    '    <transform>\n      <location value="'+fmt(L.x)+','+fmt(L.y)+',0.000000"/>\n    </transform>\n'+
+    '    <fillColor value="'+argb+'"/>\n'+
+    effectXML+
+    '    <content>'+escXML(L.char)+'</content>\n'+
+    '</text>\n';
+}
+
+function buildSceneXML(){
+  const layersXML = computedLayers.map(function(L,i){ return buildCharLayerXML(L, i+1); }).join('');
+  return '<?xml version=\'1.0\' encoding=\'UTF-8\' ?>\n'+
+  '<!-- Generated by AM Text Layer Generator (fan-made tool; not an official Alight Motion export) -->\n'+
+  '<scene title="text-animation" width="'+state.canvasW+'" height="'+state.canvasH+'" exportWidth="'+state.canvasW+'" exportHeight="'+state.canvasH+
+  '" precompose="dynamicResolution" bgcolor="#00000000" totalTime="'+Math.round(sceneTotalMs)+'" fps="'+state.fps+'" modifiedTime="'+Date.now()+
+  '" amver="1028425" ffver="106" am="com.alightcreative.motion/5.0.273.1028425" amplatform="android" retime="freeze" retimeAdaptFPS="false">\n'+
+  layersXML+'</scene>\n';
+}
+
+/* =========================================================
+   7. FONT LOADING
+   ========================================================= */
+function getKnownWeights(familyName){
+  const f = FONTS.find(function(x){ return x.name.toLowerCase() === String(familyName).toLowerCase(); });
+  return f ? f.weights : [400,700];
+}
+const loadedFontLinks = {};
+function ensureFontLoaded(familyName, weight){
+  if (state.customFontActive && familyName === state.fontFamily){
+    return Promise.resolve(); // already registered locally via FontFace on upload
+  }
+  const linkKey = familyName;
+  if (!loadedFontLinks[linkKey]){
+    const weightsCsv = getKnownWeights(familyName).join(';');
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = 'https://fonts.googleapis.com/css2?family=' + familyName.trim().replace(/ /g,'+') + ':wght@' + weightsCsv + '&display=swap';
+    document.head.appendChild(link);
+    loadedFontLinks[linkKey] = link;
+  }
+  const spec = weight + ' 32px "' + familyName + '"';
+  if (document.fonts && document.fonts.load){
+    return document.fonts.load(spec).then(function(){ return document.fonts.ready; }).catch(function(){});
+  }
+  return Promise.resolve();
+}
+
+/* =========================================================
+   8. UI — build static pieces
+   ========================================================= */
+const fontDatalist = document.getElementById('fontDatalist');
+FONTS.forEach(function(f){
+  const opt = document.createElement('option');
+  opt.value = f.name;
+  fontDatalist.appendChild(opt);
+});
+const fontInput = document.getElementById('fontInput');
+fontInput.value = state.fontFamily;
+
+const swatchesEl = document.getElementById('swatches');
+SWATCH_COLORS.forEach(function(c){
+  const sw = document.createElement('button');
+  sw.type='button'; sw.className='swatch'; sw.style.background=c;
+  if (c.toLowerCase()===state.color) sw.classList.add('active');
+  sw.addEventListener('click', function(){
+    state.color = c;
+    document.getElementById('colorInput').value = c;
+    Array.from(swatchesEl.children).forEach(function(el){el.classList.remove('active');});
+    sw.classList.add('active');
+    scheduleUpdate(true);
+  });
+  swatchesEl.appendChild(sw);
+});
+
+const presetChipsEl = document.getElementById('presetChips');
+PRESET_LIST.forEach(function(key,i){
+  const chip = document.createElement('button');
+  chip.type='button'; chip.className='chip'+(key===state.presetKey?' active':'');
+  chip.dataset.key = key;
+  chip.innerHTML = '<span class="chip-idx">'+String(i+1).padStart(2,'0')+'</span>'+PRESET_LABELS[key];
+  chip.addEventListener('click', function(){
+    state.presetKey = key;
+    Array.from(presetChipsEl.children).forEach(function(el){el.classList.remove('active');});
+    chip.classList.add('active');
+    scheduleUpdate(true);
+  });
+  presetChipsEl.appendChild(chip);
+});
+
+const exitChipsEl = document.getElementById('exitChips');
+EXIT_PRESET_LIST.forEach(function(key){
+  const chip = document.createElement('button');
+  chip.type='button'; chip.className='chip'+(key===state.exitPresetKey?' active':'');
+  chip.dataset.key = key;
+  chip.textContent = EXIT_PRESET_LABELS[key];
+  chip.addEventListener('click', function(){
+    state.exitPresetKey = key;
+    Array.from(exitChipsEl.children).forEach(function(el){el.classList.remove('active');});
+    chip.classList.add('active');
+    scheduleUpdate(true);
+  });
+  exitChipsEl.appendChild(chip);
+});
+
+/* =========================================================
+   9. UI — wire inputs
+   ========================================================= */
+document.querySelectorAll('.tabbar .tab').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    document.querySelectorAll('.tabbar .tab').forEach(function(b){ b.classList.remove('active'); });
+    btn.classList.add('active');
+    document.querySelectorAll('.tab-panel').forEach(function(p){
+      p.hidden = (p.dataset.panel !== btn.dataset.panel);
+    });
+    document.querySelector('.tabbar').scrollIntoView({behavior:'smooth', block:'start'});
+  });
+});
+
+const canvas = document.getElementById('previewCanvas');
+const ctx = canvas.getContext('2d');
+const vfEmpty = document.getElementById('vfEmpty');
+const charStripEl = document.getElementById('charStrip');
+const toastEl = document.getElementById('toast');
+
+function updateSliderFill(el){
+  const min = parseFloat(el.min), max = parseFloat(el.max), val = parseFloat(el.value);
+  const pct = ((val-min)/(max-min))*100;
+  el.style.setProperty('--fill', pct+'%');
+}
+
+function setCanvasSize(){
+  canvas.width = state.canvasW;
+  canvas.height = state.canvasH;
+  canvas.parentElement.style.aspectRatio = state.canvasW+'/'+state.canvasH;
+}
+setCanvasSize();
+
+document.getElementById('textInput').addEventListener('input', function(e){
+  state.text = e.target.value;
+  scheduleUpdate(true);
+});
+
+document.getElementById('sizeSlider').addEventListener('input', function(e){
+  state.size = parseInt(e.target.value,10);
+  document.getElementById('sizeVal').textContent = state.size+'px';
+  updateSliderFill(e.target);
+  scheduleUpdate(true);
+});
+
+document.getElementById('spacingSlider').addEventListener('input', function(e){
+  state.spacing = parseInt(e.target.value,10);
+  document.getElementById('spacingVal').textContent = state.spacing+'px';
+  updateSliderFill(e.target);
+  scheduleUpdate(true);
+});
+
+document.getElementById('durationSlider').addEventListener('input', function(e){
+  state.duration = parseFloat(e.target.value);
+  document.getElementById('durationVal').textContent = state.duration.toFixed(2)+'s';
+  updateSliderFill(e.target);
+  scheduleUpdate(true);
+});
+
+document.getElementById('delaySlider').addEventListener('input', function(e){
+  state.delay = parseInt(e.target.value,10);
+  document.getElementById('delayVal').textContent = state.delay+'ms';
+  updateSliderFill(e.target);
+  scheduleUpdate(true);
+});
+
+document.getElementById('holdSlider').addEventListener('input', function(e){
+  state.holdDuration = parseFloat(e.target.value);
+  document.getElementById('holdVal').textContent = state.holdDuration.toFixed(2)+'s';
+  updateSliderFill(e.target);
+  scheduleUpdate(true);
+});
+
+document.getElementById('colorInput').addEventListener('input', function(e){
+  state.color = e.target.value;
+  Array.from(swatchesEl.children).forEach(function(el){el.classList.remove('active');});
+  scheduleUpdate(true);
+});
+
+function refreshWeightToggle(){
+  const known = getKnownWeights(state.fontFamily);
+  const wtButtons = document.querySelectorAll('#weightToggle button');
+  wtButtons.forEach(function(b){
+    const w = parseInt(b.dataset.w,10);
+    b.disabled = known.indexOf(w) === -1;
+  });
+  if (known.indexOf(state.weight) === -1){ state.weight = known[0]; }
+  wtButtons.forEach(function(b){ b.classList.toggle('active', parseInt(b.dataset.w,10)===state.weight); });
+}
+
+function clearCustomFont(){
+  state.customFontActive = false;
+  state.customFontLabel = null;
+  document.getElementById('fontInput').disabled = false;
+  document.getElementById('fontCustomNote').style.display = 'none';
+  document.getElementById('fontFileInput').value = '';
+}
+
+fontInput.addEventListener('input', function(e){
+  if (state.customFontActive) return; // typing is disabled while a custom font is active; must clear first
+  state.fontFamily = e.target.value || 'Poppins';
+  refreshWeightToggle();
+  loadAndUpdate(true);
+});
+
+document.getElementById('fontFileInput').addEventListener('change', function(e){
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  if (file.size > 6*1024*1024){ showToast('File font maksimal 6MB'); return; }
+  const originalName = file.name.replace(/\.[^.]+$/,'');
+  const familyName = 'UserFont' + Date.now();
+  const reader = new FileReader();
+  reader.onload = function(ev){
+    const face = new FontFace(familyName, ev.target.result);
+    face.load().then(function(loaded){
+      document.fonts.add(loaded);
+      state.fontFamily = familyName;
+      state.customFontActive = true;
+      state.customFontLabel = originalName;
+      fontInput.value = originalName + ' (custom)';
+      fontInput.disabled = true;
+      const note = document.getElementById('fontCustomNote');
+      note.style.display = 'block';
+      note.innerHTML = 'Font custom "'+originalName+'" aktif — dipakai untuk preview & perhitungan posisi (measureText real). '+
+        'Referensi font custom langsung di XML Alight Motion belum bisa saya verifikasi, jadi setelah import, assign font ini manual per-layer lewat font picker AM. '+
+        '<button type="button" id="clearCustomFontBtn">Ganti font lain</button>';
+      document.getElementById('clearCustomFontBtn').addEventListener('click', function(){
+        clearCustomFont();
+        loadAndUpdate(true);
+      });
+      refreshWeightToggle();
+      doUpdate(true);
+    }).catch(function(err){ showToast('Gagal load font: ' + err.message); });
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+document.querySelectorAll('#weightToggle button').forEach(function(btn){
+  btn.addEventListener('click', function(){
+    if (btn.disabled) return;
+    state.weight = parseInt(btn.dataset.w,10);
+    document.querySelectorAll('#weightToggle button').forEach(function(b){b.classList.remove('active');});
+    btn.classList.add('active');
+    loadAndUpdate(true);
+  });
+});
+
+document.getElementById('fpsSlider').addEventListener('input', function(e){
+  state.fps = parseInt(e.target.value,10);
+  document.getElementById('fpsVal').textContent = state.fps+'fps';
+  updateSliderFill(e.target);
+});
+
+document.querySelectorAll('#canvasChips .chip').forEach(function(chip){
+  chip.addEventListener('click', function(){
+    document.querySelectorAll('#canvasChips .chip').forEach(function(c){c.classList.remove('active');});
+    chip.classList.add('active');
+    state.canvasW = parseInt(chip.dataset.w,10);
+    state.canvasH = parseInt(chip.dataset.h,10);
+    setCanvasSize();
+    scheduleUpdate(true);
+  });
+});
+
+document.getElementById('guideBtn').addEventListener('click', function(){
+  state.guides = !state.guides;
+  this.classList.toggle('active', state.guides);
+});
+
+['sizeSlider','spacingSlider','durationSlider','delaySlider','fpsSlider','holdSlider'].forEach(function(id){
+  updateSliderFill(document.getElementById(id));
+});
+
+/* =========================================================
+   10. CHARACTER STRIP (signature element)
+   ========================================================= */
+function renderCharStrip(layoutInfo){
+  charStripEl.innerHTML = '';
+  computedLayers.forEach(function(L,i){
+    const chip = document.createElement('div');
+    chip.className = 'char-chip' + (L.overridden ? ' overridden' : '');
+    chip.style.animationDelay = Math.min(i*40,400)+'ms';
+    const cc = document.createElement('span'); cc.className='cc-char'; cc.textContent = L.char;
+    const ms = document.createElement('span'); ms.className='cc-ms'; ms.textContent = Math.round(L.startMs)+'ms';
+    chip.appendChild(cc); chip.appendChild(ms);
+    chip.addEventListener('click', function(){ openCharSheet(i); });
+    charStripEl.appendChild(chip);
+  });
+}
+
+/* ---- per-character override sheet ---- */
+let sheetCharIndex = null;
+const sheetBackdrop = document.getElementById('sheetBackdrop');
+const charSheet = document.getElementById('charSheet');
+const sheetChar = document.getElementById('sheetChar');
+const sheetColorInput = document.getElementById('sheetColorInput');
+const sheetSwatchesEl = document.getElementById('sheetSwatches');
+const sheetPresetChipsEl = document.getElementById('sheetPresetChips');
+
+SWATCH_COLORS.forEach(function(c){
+  const sw = document.createElement('button');
+  sw.type='button'; sw.className='swatch'; sw.style.background=c;
+  sw.addEventListener('click', function(){
+    applyCharOverride(sheetCharIndex, {color:c});
+    sheetColorInput.value = c;
+  });
+  sheetSwatchesEl.appendChild(sw);
+});
+sheetColorInput.addEventListener('input', function(e){
+  applyCharOverride(sheetCharIndex, {color:e.target.value});
+});
+document.getElementById('sheetColorReset').addEventListener('click', function(){
+  applyCharOverride(sheetCharIndex, {color:undefined});
+  sheetColorInput.value = state.color;
+});
+PRESET_LIST.forEach(function(key){
+  const chip = document.createElement('button');
+  chip.type='button'; chip.className='chip'; chip.dataset.key = key;
+  chip.textContent = PRESET_LABELS[key];
+  chip.addEventListener('click', function(){
+    applyCharOverride(sheetCharIndex, {presetKey:key});
+    Array.from(sheetPresetChipsEl.children).forEach(function(c){c.classList.remove('active');});
+    chip.classList.add('active');
+  });
+  sheetPresetChipsEl.appendChild(chip);
+});
+document.getElementById('sheetPresetReset').addEventListener('click', function(){
+  applyCharOverride(sheetCharIndex, {presetKey:undefined});
+  Array.from(sheetPresetChipsEl.children).forEach(function(c){c.classList.remove('active');});
+});
+
+function applyCharOverride(idx, patch){
+  if (idx===null || idx===undefined) return;
+  const cur = state.charOverrides[idx] || {};
+  const next = Object.assign({}, cur, patch);
+  Object.keys(next).forEach(function(k){ if (next[k]===undefined) delete next[k]; });
+  if (Object.keys(next).length===0){ delete state.charOverrides[idx]; }
+  else { state.charOverrides[idx] = next; }
+  scheduleUpdate(false);
+}
+
+function openCharSheet(idx){
+  sheetCharIndex = idx;
+  const L = computedLayers[idx];
+  sheetChar.textContent = L.char;
+  const ov = state.charOverrides[idx] || {};
+  sheetColorInput.value = ov.color || state.color;
+  Array.from(sheetPresetChipsEl.children).forEach(function(c){
+    c.classList.toggle('active', c.dataset.key === ov.presetKey);
+  });
+  sheetBackdrop.hidden = false; charSheet.hidden = false;
+  requestAnimationFrame(function(){ sheetBackdrop.classList.add('show'); charSheet.classList.add('show'); });
+}
+function closeCharSheet(){
+  sheetBackdrop.classList.remove('show'); charSheet.classList.remove('show');
+  setTimeout(function(){ sheetBackdrop.hidden = true; charSheet.hidden = true; }, 250);
+}
+document.getElementById('sheetClose').addEventListener('click', closeCharSheet);
+sheetBackdrop.addEventListener('click', closeCharSheet);
+
+/* =========================================================
+   11. PREVIEW RENDER LOOP
+   ========================================================= */
+let playStart = performance.now();
+
+function drawFrame(nowMs){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (!computedLayers.length) return;
+
+  if (state.guides){
+    const ref = computedLayers[0];
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0,229,199,0.35)';
+    ctx.lineWidth = Math.max(state.canvasW*0.0016,1.5);
+    ctx.setLineDash([state.canvasW*0.01, state.canvasW*0.008]);
+    [ref.y, ref.y-ref.ascent, ref.y+ref.descent].forEach(function(yy){
+      ctx.beginPath(); ctx.moveTo(0,yy); ctx.lineTo(state.canvasW,yy); ctx.stroke();
+    });
+    ctx.restore();
+  }
+
+  computedLayers.forEach(function(L){
+    if (nowMs < L.startMs || nowMs > L.endMs) return;
+    const localT = (nowMs - L.startMs) / Math.max(L.endMs - L.startMs, 1);
+    const alpha = L.anim.alpha ? evalProp(L.anim.alpha, localT) : 1;
+    const scaleV = L.anim.scale ? evalProp(L.anim.scale, localT) : 1;
+    const angleV = L.anim.angle ? evalProp(L.anim.angle, localT) : 0;
+    const offV = L.anim.offset ? evalProp(L.anim.offset, localT) : [0,0];
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, alpha==null?1:alpha));
+    ctx.translate(L.x + offV[0], L.y + offV[1]);
+    ctx.rotate((angleV||0) * Math.PI/180);
+    ctx.scale(scaleV==null?1:scaleV, scaleV==null?1:scaleV);
+    ctx.font = L.weight + ' ' + L.size + 'px "' + L.fontFamily + '"';
+    ctx.fillStyle = L.color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText(L.char, 0, 0);
+    ctx.restore();
+  });
+}
+
+function fmtTimecode(ms){
+  const s = Math.floor(ms/1000);
+  const cs = Math.floor((ms%1000)/10);
+  return String(s).padStart(2,'0')+':'+String(cs).padStart(2,'0')+'.'+String(Math.floor(ms%10));
+}
+
+function loop(now){
+  const elapsed = now - playStart;
+  const cycleLen = sceneTotalMs + 700;
+  const t = cycleLen>0 ? (elapsed % cycleLen) : 0;
+  const clamped = Math.min(t, sceneTotalMs);
+  drawFrame(clamped);
+  document.getElementById('vfTimecode').textContent = fmtTimecode(clamped);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+
+document.getElementById('replayBtn').addEventListener('click', function(){ playStart = performance.now(); });
+
+/* =========================================================
+   12. UPDATE ORCHESTRATION
+   ========================================================= */
+let updateTimer = null;
+function scheduleUpdate(restart){
+  if (updateTimer) clearTimeout(updateTimer);
+  updateTimer = setTimeout(function(){ doUpdate(restart); }, 60);
+}
+function doUpdate(restart){
+  const info = recompute(ctx);
+  vfEmpty.style.display = computedLayers.length ? 'none' : 'flex';
+  renderCharStrip(info);
+  if (restart) playStart = performance.now();
+  document.getElementById('downloadBtn').style.display = 'none';
+  document.getElementById('shareBtn').style.display = 'none';
+}
+function loadAndUpdate(restart){
+  ensureFontLoaded(state.fontFamily, state.weight).then(function(){ doUpdate(restart); });
+}
+
+/* =========================================================
+   13. GENERATE / SHARE / DOWNLOAD
+   ========================================================= */
+function slugify(s){
+  return (s||'text').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'').slice(0,30) || 'text';
+}
+function showToast(msg){
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  setTimeout(function(){ toastEl.classList.remove('show'); }, 2200);
+}
+
+function canShareFiles(){
+  try{
+    if (!navigator.canShare) return false;
+    const t = new File(['x'],'t.xml',{type:'application/xml'});
+    return navigator.canShare({files:[t]});
+  }catch(e){ return false; }
+}
+
+let lastXml = null, lastFileName = null;
+const shareBtn = document.getElementById('shareBtn');
+const downloadBtn = document.getElementById('downloadBtn');
+const xmlViewArea = document.getElementById('xmlViewArea');
+
+function refreshDownloadArtifacts(){
+  const blob = new Blob([lastXml], {type:'application/xml'});
+  downloadBtn.href = URL.createObjectURL(blob);
+  downloadBtn.download = lastFileName;
+}
+
+document.getElementById('generateBtn').addEventListener('click', function(){
+  recompute(ctx);
+  if (!computedLayers.length){
+    showToast('Isi text dulu ya');
+    return;
+  }
+  lastXml = buildSceneXML();
+  lastFileName = 'am-text-' + slugify(state.text) + '.xml';
+  refreshDownloadArtifacts();
+  xmlViewArea.value = lastXml;
+
+  if (canShareFiles()){
+    shareBtn.style.display = 'inline-flex';
+    downloadBtn.className = 'btn-secondary';
+  } else {
+    shareBtn.style.display = 'none';
+    downloadBtn.className = 'btn-primary';
+  }
+  downloadBtn.style.display = 'inline-flex';
+  saveSettingsToStorage();
+  showToast('XML siap — ' + computedLayers.length + ' layer karakter dibuat');
+});
+
+const xmlViewWrap = document.getElementById('xmlViewWrap');
+document.getElementById('xmlViewBtn').addEventListener('click', function(){
+  const showing = xmlViewWrap.style.display !== 'none';
+  xmlViewWrap.style.display = showing ? 'none' : 'block';
+  if (!showing) xmlViewArea.value = lastXml || '(belum ada — tap Generate XML dulu)';
+});
+document.getElementById('xmlCopyBtn').addEventListener('click', async function(){
+  try{
+    await navigator.clipboard.writeText(xmlViewArea.value);
+    showToast('XML disalin ke clipboard');
+  }catch(e){
+    xmlViewArea.focus(); xmlViewArea.select();
+    showToast('Tap lama lalu pilih Copy manual');
+  }
+});
+document.getElementById('xmlApplyBtn').addEventListener('click', function(){
+  if (!xmlViewArea.value.trim()){ showToast('XML kosong'); return; }
+  lastXml = xmlViewArea.value;
+  if (!lastFileName) lastFileName = 'am-text-' + slugify(state.text) + '.xml';
+  refreshDownloadArtifacts();
+  downloadBtn.style.display = 'inline-flex';
+  showToast('Versi editan dipakai untuk Share/Download');
+});
+
+shareBtn.addEventListener('click', async function(){
+  if (!lastXml) return;
+  try{
+    const file = new File([lastXml], lastFileName, {type:'application/xml'});
+    await navigator.share({ files:[file], title:'Alight Motion Text Animation' });
+  }catch(err){
+    if (err && err.name !== 'AbortError') showToast('Gagal share — coba Download manual');
+  }
+});
+
+/* =========================================================
+   14. SETTINGS PERSISTENCE (localStorage — this is a downloaded
+   standalone file opened directly in the phone's browser, so
+   regular localStorage works fine here)
+   ========================================================= */
+const STORAGE_KEY = 'amTextGenerator_lastSettings_v1';
+function saveSettingsToStorage(){
+  try{
+    const toSave = {
+      text:state.text,
+      fontFamily: state.customFontActive ? undefined : state.fontFamily,
+      weight:state.weight, size:state.size, color:state.color, spacing:state.spacing,
+      presetKey:state.presetKey, exitPresetKey:state.exitPresetKey,
+      duration:state.duration, delay:state.delay, holdDuration:state.holdDuration,
+      canvasW:state.canvasW, canvasH:state.canvasH, fps:state.fps
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(toSave));
+  }catch(e){ /* storage unavailable — non-critical, fail silently */ }
+}
+function loadSettingsFromStorage(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return false;
+    const saved = JSON.parse(raw);
+    Object.keys(saved).forEach(function(k){ if (saved[k] !== undefined) state[k] = saved[k]; });
+    return true;
+  }catch(e){ return false; }
+}
+function syncUIFromState(){
+  document.getElementById('textInput').value = state.text;
+  fontInput.value = state.fontFamily;
+  document.getElementById('sizeSlider').value = state.size;
+  document.getElementById('sizeVal').textContent = state.size+'px';
+  document.getElementById('colorInput').value = state.color;
+  document.getElementById('spacingSlider').value = state.spacing;
+  document.getElementById('spacingVal').textContent = state.spacing+'px';
+  document.getElementById('durationSlider').value = state.duration;
+  document.getElementById('durationVal').textContent = state.duration.toFixed(2)+'s';
+  document.getElementById('delaySlider').value = state.delay;
+  document.getElementById('delayVal').textContent = state.delay+'ms';
+  document.getElementById('holdSlider').value = state.holdDuration;
+  document.getElementById('holdVal').textContent = state.holdDuration.toFixed(2)+'s';
+  document.getElementById('fpsSlider').value = state.fps;
+  document.getElementById('fpsVal').textContent = state.fps+'fps';
+  Array.from(presetChipsEl.children).forEach(function(c){ c.classList.toggle('active', c.dataset.key===state.presetKey); });
+  Array.from(exitChipsEl.children).forEach(function(c){ c.classList.toggle('active', c.dataset.key===state.exitPresetKey); });
+  document.querySelectorAll('#canvasChips .chip').forEach(function(c){
+    c.classList.toggle('active', parseInt(c.dataset.w,10)===state.canvasW && parseInt(c.dataset.h,10)===state.canvasH);
+  });
+  refreshWeightToggle();
+  ['sizeSlider','spacingSlider','durationSlider','delaySlider','fpsSlider','holdSlider'].forEach(function(id){
+    updateSliderFill(document.getElementById(id));
+  });
+}
+
+/* =========================================================
+   15. INIT
+   ========================================================= */
+const restored = loadSettingsFromStorage();
+if (restored) syncUIFromState();
+loadAndUpdate(true);
+if (restored) showToast('Pengaturan terakhir dipulihkan');
+
+})();
+</script>
+</body>
+</html>
