@@ -3,7 +3,17 @@
     {
       "name": "SvgToXmlAm",
       "description": "Convert SVG jadi format XML buat Alight Motion.",
-      "thumbnail": ""
+      "thumbnail": "https://example.com/svg-to-xml.png"
+    },
+    {
+      "name": "AmTextGenerator",
+      "description": "Membuat text animation untuk Alight Motion.",
+      "thumbnail": "https://example.com/text-generator.png"
+    },
+    {
+      "name": "BackgroundGenerator",
+      "description": "Membuat background untuk kebutuhan editing.",
+      "thumbnail": "https://example.com/background.png"
     }
   ]
 }
