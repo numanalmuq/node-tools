@@ -1,0 +1,1383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B0B0C">
+<title>Reverse</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect width='24' height='24' rx='6' fill='%230B0B0C'/%3E%3Cpolygon points='3,12 11,5 11,19' fill='%23C98A3E'/%3E%3Cpolygon points='11,12 19,5 19,19' fill='%23C98A3E'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#0B0B0C;
+    --surface:#17161A;
+    --surface-2:#1D1B20;
+    --border:#29272C;
+    --text:#F2F0ED;
+    --text-muted:#9C979E;
+    --accent:#C98A3E;
+    --accent-strong:#DDA155;
+    --accent-text:#1A1208;
+    --danger:#D0665D;
+    --focus:#DDA155;
+
+    --sp-1:4px;
+    --sp-2:8px;
+    --sp-3:12px;
+    --sp-4:16px;
+    --sp-5:24px;
+    --sp-6:32px;
+    --sp-7:48px;
+
+    --radius-sm:10px;
+    --radius-md:14px;
+    --radius-lg:20px;
+
+    --duration:200ms;
+    --ease:cubic-bezier(0.4,0,0.2,1);
+
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  *,*::before,*::after{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    padding:0;
+    height:100%;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--font);
+    -webkit-tap-highlight-color:transparent;
+  }
+
+  body{
+    overscroll-behavior-y:none;
+  }
+
+  h1,h2,h3,p,dl,dd,dt{ margin:0; }
+
+  button{
+    font-family:inherit;
+    -webkit-tap-highlight-color:transparent;
+    touch-action:manipulation;
+  }
+
+  :focus{ outline:none; }
+  :focus-visible{
+    outline:2px solid var(--focus);
+    outline-offset:2px;
+    border-radius:4px;
+  }
+
+  .sr-only{
+    position:absolute;
+    width:1px;height:1px;
+    padding:0;margin:-1px;
+    overflow:hidden;
+    clip:rect(0,0,0,0);
+    white-space:nowrap;
+    border:0;
+  }
+
+  #app{
+    min-height:100%;
+    min-height:100dvh;
+  }
+
+  .screen{
+    display:none;
+    flex-direction:column;
+    min-height:100vh;
+    min-height:100dvh;
+    padding-top:env(safe-area-inset-top);
+    padding-left:env(safe-area-inset-left);
+    padding-right:env(safe-area-inset-right);
+  }
+  .screen.active{
+    display:flex;
+    animation:screenIn var(--duration) var(--ease);
+  }
+  @keyframes screenIn{ from{ opacity:0; } to{ opacity:1; } }
+
+  /* ---------- Buttons ---------- */
+  .btn{
+    appearance:none;
+    border:none;
+    cursor:pointer;
+    border-radius:var(--radius-md);
+    font-weight:600;
+    font-size:16px;
+    line-height:1;
+    transition:transform var(--duration) var(--ease), background-color var(--duration) var(--ease), opacity var(--duration) var(--ease);
+    user-select:none;
+  }
+  .btn:active{ transform:scale(0.97); }
+  .btn:disabled{ opacity:0.45; cursor:not-allowed; transform:none; }
+
+  .btn-primary{
+    background:var(--accent);
+    color:var(--accent-text);
+    min-height:52px;
+    padding:0 var(--sp-5);
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-2);
+  }
+  .btn-primary:not(:disabled):hover{ background:var(--accent-strong); }
+
+  .btn-full{ width:100%; }
+
+  .btn-text{
+    background:transparent;
+    color:var(--text-muted);
+    min-height:44px;
+    padding:0 var(--sp-3);
+  }
+  .btn-text:not(:disabled):hover{ color:var(--text); }
+
+  .btn-icon{
+    background:transparent;
+    width:44px;
+    height:44px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    color:var(--text);
+    border-radius:var(--radius-sm);
+  }
+  .btn-icon:not(:disabled):hover{ background:var(--surface); }
+
+  /* ---------- Home ---------- */
+  #screen-home{
+    align-items:center;
+    justify-content:center;
+    padding:var(--sp-6) var(--sp-5);
+    text-align:center;
+  }
+  .home-icon{
+    color:var(--accent);
+    width:56px;
+    height:56px;
+    margin-bottom:var(--sp-5);
+  }
+  .home-icon svg{ width:100%; height:100%; display:block; }
+  #screen-home h1{
+    font-size:clamp(26px,7vw,32px);
+    font-weight:800;
+    letter-spacing:-0.01em;
+    line-height:1.15;
+    max-width:20ch;
+  }
+  #screen-home .subtext{
+    margin-top:var(--sp-3);
+    color:var(--text-muted);
+    font-size:15px;
+    line-height:1.5;
+    max-width:32ch;
+  }
+  #screen-home .home-actions{
+    margin-top:var(--sp-7);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:var(--sp-3);
+    width:100%;
+  }
+  #screen-home .btn-primary{
+    width:100%;
+    max-width:340px;
+  }
+  #screen-home .microcopy{
+    color:var(--text-muted);
+    font-size:13px;
+  }
+
+  /* ---------- Shared: header / preview / bottom action ---------- */
+  .top-header{
+    display:flex;
+    align-items:center;
+    padding:var(--sp-2) var(--sp-2);
+    min-height:56px;
+    flex-shrink:0;
+  }
+  .top-header h2{
+    flex:1;
+    text-align:center;
+    font-size:17px;
+    font-weight:600;
+    margin-right:44px; /* balance the back button width */
+  }
+
+  .result-header{
+    padding:var(--sp-6) var(--sp-5) var(--sp-2);
+    flex-shrink:0;
+  }
+  .result-header h2{
+    font-size:22px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+
+  .screen-main{
+    flex:1;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    padding:0 var(--sp-5);
+    min-height:0;
+    overflow-y:auto;
+  }
+
+  .preview-card{
+    position:relative;
+    width:100%;
+    display:flex;
+    justify-content:center;
+    border-radius:var(--radius-lg);
+    overflow:hidden;
+    background:var(--surface);
+    border:1px solid var(--border);
+    flex-shrink:0;
+  }
+  .preview-card video{
+    display:block;
+    width:auto;
+    height:auto;
+    max-width:100%;
+    max-height:52vh;
+  }
+
+  .meta-block{
+    margin-top:var(--sp-4);
+  }
+  .meta-filename{
+    font-size:15px;
+    font-weight:600;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .meta-resolution{
+    margin-top:2px;
+    font-size:13px;
+    color:var(--text-muted);
+  }
+
+  .timeline{
+    margin-top:var(--sp-5);
+    display:flex;
+    align-items:center;
+    gap:var(--sp-3);
+  }
+  .timeline-time{
+    font-size:12px;
+    font-variant-numeric:tabular-nums;
+    color:var(--text-muted);
+    flex-shrink:0;
+    min-width:2.5em;
+  }
+  .timeline-time.end{ text-align:right; }
+  .timeline-track{
+    position:relative;
+    flex:1;
+    height:3px;
+    background:var(--border);
+    border-radius:999px;
+  }
+  .timeline-range{
+    position:absolute;
+    top:0; bottom:0;
+    left:0%;
+    width:100%;
+    background:var(--accent);
+    border-radius:999px;
+  }
+  .trim-handle{
+    position:absolute;
+    top:50%;
+    left:0%;
+    width:44px;
+    height:44px;
+    margin-left:-22px;
+    margin-top:-22px;
+    background:transparent;
+    border:none;
+    padding:0;
+    cursor:grab;
+    touch-action:none;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-tap-highlight-color:transparent;
+  }
+  .trim-handle::after{
+    content:"";
+    width:14px;
+    height:14px;
+    border-radius:50%;
+    background:var(--accent-strong);
+    border:2px solid var(--bg);
+    box-shadow:0 0 0 1px var(--accent-strong);
+    transition:transform var(--duration) var(--ease), box-shadow var(--duration) var(--ease);
+  }
+  .trim-handle:active{ cursor:grabbing; }
+  .trim-handle:active::after{ transform:scale(1.3); }
+  .trim-handle:focus-visible{ outline:none; }
+  .trim-handle:focus-visible::after{
+    box-shadow:0 0 0 1px var(--accent-strong), 0 0 0 4px rgba(221,161,85,0.35);
+  }
+
+  .selection-duration{
+    margin-top:var(--sp-2);
+    font-size:12px;
+    color:var(--text-muted);
+    text-align:center;
+    min-height:1.5em;
+  }
+
+  .control-label{
+    margin-top:var(--sp-5);
+    margin-bottom:var(--sp-2);
+    font-size:13px;
+    color:var(--text-muted);
+    font-weight:600;
+  }
+  .control-label + .mode-toggle{
+    margin-top:0;
+  }
+
+  .mode-toggle{
+    margin-top:var(--sp-5);
+    display:flex;
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:3px;
+    gap:3px;
+    flex-shrink:0;
+  }
+  .mode-option{
+    flex:1;
+    min-height:38px;
+    border:none;
+    background:transparent;
+    color:var(--text-muted);
+    border-radius:999px;
+    font-size:14px;
+    font-weight:600;
+    transition:background-color var(--duration) var(--ease), color var(--duration) var(--ease);
+  }
+  .mode-option.active{
+    background:var(--accent);
+    color:var(--accent-text);
+  }
+
+  .warning-text{
+    margin-top:var(--sp-4);
+    font-size:13px;
+    color:var(--accent-strong);
+    line-height:1.5;
+  }
+  .warning-text[hidden]{ display:none; }
+
+  .muted-note{
+    margin-top:var(--sp-3);
+    font-size:13px;
+    color:var(--text-muted);
+    text-align:center;
+  }
+  .muted-note[hidden]{ display:none; }
+
+  .bottom-action{
+    flex-shrink:0;
+    padding:var(--sp-4) var(--sp-5);
+    padding-bottom:max(var(--sp-5), env(safe-area-inset-bottom));
+    display:flex;
+    flex-direction:column;
+    gap:var(--sp-2);
+  }
+  .secondary-actions{
+    display:flex;
+    justify-content:center;
+    gap:var(--sp-2);
+  }
+  .secondary-actions .btn-text{ font-size:14px; }
+  .secondary-actions .dot-sep{
+    color:var(--border);
+    align-self:center;
+  }
+
+  /* ---------- Editor ---------- */
+  #infoDuration{} /* placeholder hook, unused visually (kept for JS clarity) */
+
+  /* ---------- Processing ---------- */
+  #screen-processing .screen-main{
+    justify-content:center;
+  }
+  .processing-overlay{
+    position:absolute;
+    inset:0;
+    background:rgba(8,8,9,0.86);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:var(--sp-4);
+    padding:var(--sp-5);
+    text-align:center;
+  }
+  .processing-status{
+    font-size:16px;
+    font-weight:600;
+  }
+  .progress-track{
+    width:100%;
+    max-width:260px;
+    height:4px;
+    background:rgba(255,255,255,0.14);
+    border-radius:999px;
+    overflow:hidden;
+  }
+  .progress-fill{
+    height:100%;
+    width:0%;
+    background:var(--accent);
+    border-radius:999px;
+    transition:width 120ms linear;
+  }
+  .progress-fill.indeterminate{
+    width:40% !important;
+    animation:indeterminate 1.1s ease-in-out infinite;
+  }
+  @keyframes indeterminate{
+    0%{ transform:translateX(-100%); }
+    100%{ transform:translateX(250%); }
+  }
+  .progress-label{
+    font-size:13px;
+    font-variant-numeric:tabular-nums;
+    color:var(--text-muted);
+  }
+
+  /* ---------- Result ---------- */
+  #screen-result .screen-main{ padding-top:0; }
+
+  /* ---------- Error ---------- */
+  #screen-error{
+    align-items:center;
+    justify-content:center;
+    padding:var(--sp-6) var(--sp-5);
+    text-align:center;
+  }
+  .error-icon{
+    color:var(--danger);
+    width:48px;
+    height:48px;
+    margin-bottom:var(--sp-4);
+  }
+  .error-icon svg{ width:100%; height:100%; display:block; }
+  #screen-error h2{
+    font-size:19px;
+    font-weight:700;
+  }
+  #screen-error p{
+    margin-top:var(--sp-2);
+    color:var(--text-muted);
+    font-size:14px;
+    line-height:1.55;
+    max-width:30ch;
+  }
+  #screen-error .bottom-action{
+    width:100%;
+    max-width:340px;
+    margin-top:var(--sp-6);
+  }
+
+  @media (min-width:480px){
+    .preview-card video{ max-height:60vh; }
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{
+      animation-duration:0.01ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:0.01ms !important;
+    }
+  }
+</style>
+</head>
+<body>
+<noscript>This app requires JavaScript to work.</noscript>
+<div id="app">
+
+  <section id="screen-home" class="screen active">
+    <div class="home-icon" aria-hidden="true">
+      <svg viewBox="0 0 20 24" xmlns="http://www.w3.org/2000/svg">
+        <polygon points="1,12 9,5 9,19" fill="currentColor"/>
+        <polygon points="9,12 17,5 17,19" fill="currentColor"/>
+      </svg>
+    </div>
+    <h1>Reverse your video.</h1>
+    <p class="subtext">Choose a video and reverse it directly in your browser.</p>
+    <div class="home-actions">
+      <button type="button" id="btnChooseVideo" class="btn btn-primary">Choose Video</button>
+      <p class="microcopy">Your video stays on your device.</p>
+    </div>
+  </section>
+
+  <section id="screen-editor" class="screen">
+    <header class="top-header">
+      <button type="button" id="btnBack" class="btn-icon" aria-label="Back">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <h2>Reverse</h2>
+    </header>
+    <main class="screen-main">
+      <div class="preview-card">
+        <video id="previewVideo" playsinline controls preload="metadata"></video>
+      </div>
+      <div class="meta-block">
+        <div class="meta-filename" id="infoFileName">&nbsp;</div>
+        <div class="meta-resolution" id="infoResolution">&nbsp;</div>
+      </div>
+      <div class="timeline">
+        <span class="timeline-time" id="timelineStart">0:00</span>
+        <div class="timeline-track" id="timelineTrack">
+          <div class="timeline-range" id="timelineRange"></div>
+          <div class="trim-handle" id="trimStartHandle" role="slider" tabindex="0" aria-label="Trim start" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div>
+          <div class="trim-handle" id="trimEndHandle" role="slider" tabindex="0" aria-label="Trim end" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0"></div>
+        </div>
+        <span class="timeline-time end" id="timelineEnd">0:00</span>
+      </div>
+      <p class="selection-duration" id="selectionDuration"></p>
+      <div class="mode-toggle" role="radiogroup" aria-label="Export mode">
+        <button type="button" class="mode-option active" id="modeReverseBtn" role="radio" aria-checked="true">Reverse</button>
+        <button type="button" class="mode-option" id="modeBoomerangBtn" role="radio" aria-checked="false">Boomerang</button>
+      </div>
+      <p class="control-label">Speed</p>
+      <div class="mode-toggle" role="radiogroup" aria-label="Playback speed" id="speedToggle">
+        <button type="button" class="mode-option" data-speed="0.5" role="radio" aria-checked="false">0.5&times;</button>
+        <button type="button" class="mode-option active" data-speed="1" role="radio" aria-checked="true">1&times;</button>
+        <button type="button" class="mode-option" data-speed="2" role="radio" aria-checked="false">2&times;</button>
+      </div>
+      <p class="warning-text" id="longVideoWarning" hidden></p>
+    </main>
+    <div class="bottom-action">
+      <button type="button" id="btnReverse" class="btn btn-primary btn-full">Reverse Video</button>
+    </div>
+  </section>
+
+  <section id="screen-processing" class="screen">
+    <header class="top-header">
+      <span class="btn-icon" aria-hidden="true"></span>
+      <h2>Reverse</h2>
+    </header>
+    <main class="screen-main">
+      <div class="preview-card">
+        <video id="processingVideoContext" playsinline muted preload="metadata"></video>
+        <div class="processing-overlay">
+          <p class="processing-status" id="processingStatus">Reversing video&hellip;</p>
+          <div class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="progressBar" aria-label="Processing progress">
+            <div class="progress-fill" id="progressFill"></div>
+          </div>
+          <p class="progress-label" id="progressLabel" aria-live="polite">0%</p>
+          <button type="button" id="btnCancel" class="btn btn-text">Cancel</button>
+        </div>
+      </div>
+    </main>
+  </section>
+
+  <section id="screen-result" class="screen">
+    <header class="result-header">
+      <h2>Your video is ready.</h2>
+    </header>
+    <main class="screen-main">
+      <div class="preview-card">
+        <video id="resultVideo" playsinline controls preload="metadata"></video>
+      </div>
+      <p class="muted-note" id="noAudioNote" hidden>This video doesn't include audio.</p>
+    </main>
+    <div class="bottom-action">
+      <button type="button" id="btnDownload" class="btn btn-primary btn-full">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M12 4v10m0 0l-4-4m4 4l4-4M5 18h14" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        Download Video
+      </button>
+      <div class="secondary-actions">
+        <button type="button" id="btnReverseAgain" class="btn btn-text">Reverse Again</button>
+        <span class="dot-sep" aria-hidden="true">&middot;</span>
+        <button type="button" id="btnChooseAnother" class="btn btn-text">Choose Another Video</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="screen-error" class="screen">
+    <div class="error-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/>
+        <line x1="12" y1="7.5" x2="12" y2="13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        <circle cx="12" cy="16.4" r="1.1" fill="currentColor"/>
+      </svg>
+    </div>
+    <h2 id="errorTitle">Something went wrong</h2>
+    <p id="errorMessage">Please try again.</p>
+    <div class="bottom-action">
+      <button type="button" id="btnErrorBack" class="btn btn-primary btn-full">Choose Another Video</button>
+    </div>
+  </section>
+
+</div>
+
+<input type="file" id="fileInput" accept="video/*" hidden>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ---------------- Element references ---------------- */
+  var screens = {
+    home: document.getElementById('screen-home'),
+    editor: document.getElementById('screen-editor'),
+    processing: document.getElementById('screen-processing'),
+    result: document.getElementById('screen-result'),
+    error: document.getElementById('screen-error')
+  };
+
+  var fileInput = document.getElementById('fileInput');
+  var btnChooseVideo = document.getElementById('btnChooseVideo');
+  var btnBack = document.getElementById('btnBack');
+  var btnReverse = document.getElementById('btnReverse');
+  var btnCancel = document.getElementById('btnCancel');
+  var btnDownload = document.getElementById('btnDownload');
+  var btnReverseAgain = document.getElementById('btnReverseAgain');
+  var btnChooseAnother = document.getElementById('btnChooseAnother');
+  var btnErrorBack = document.getElementById('btnErrorBack');
+
+  var previewVideo = document.getElementById('previewVideo');
+  var processingVideoContext = document.getElementById('processingVideoContext');
+  var resultVideo = document.getElementById('resultVideo');
+
+  var infoFileName = document.getElementById('infoFileName');
+  var infoResolution = document.getElementById('infoResolution');
+  var timelineStart = document.getElementById('timelineStart');
+  var timelineEnd = document.getElementById('timelineEnd');
+  var timelineTrack = document.getElementById('timelineTrack');
+  var timelineRange = document.getElementById('timelineRange');
+  var trimStartHandle = document.getElementById('trimStartHandle');
+  var trimEndHandle = document.getElementById('trimEndHandle');
+  var selectionDuration = document.getElementById('selectionDuration');
+  var modeReverseBtn = document.getElementById('modeReverseBtn');
+  var modeBoomerangBtn = document.getElementById('modeBoomerangBtn');
+  var speedToggle = document.getElementById('speedToggle');
+  var longVideoWarning = document.getElementById('longVideoWarning');
+
+  var progressBar = document.getElementById('progressBar');
+  var progressFill = document.getElementById('progressFill');
+  var progressLabel = document.getElementById('progressLabel');
+  var processingStatus = document.getElementById('processingStatus');
+
+  var noAudioNote = document.getElementById('noAudioNote');
+  var errorTitle = document.getElementById('errorTitle');
+  var errorMessage = document.getElementById('errorMessage');
+
+  /* ---------------- State ---------------- */
+  var currentFile = null;
+  var currentObjectUrl = null;
+  var currentDuration = 0;
+  var resultObjectUrl = null;
+  var resultExtension = 'webm';
+  var cancelled = false;
+  var processing = false;
+
+  var trimStart = 0;
+  var trimEnd = 0;
+  var mode = 'reverse';
+  var resultMode = 'reverse';
+  var speed = 1;
+  var activeDragHandle = null;
+
+  var LONG_VIDEO_SECONDS = 30;
+  var MIN_TRIM_SECONDS = 0.3;
+  var MAX_FILE_BYTES = 500 * 1024 * 1024;
+  var MAX_DIM = 1080;
+  var MAX_FRAMES = 720;
+  var DEFAULT_FPS = 24;
+  var MIN_FPS = 8;
+
+  /* ---------------- Helpers ---------------- */
+  function haptic(ms){
+    if (navigator.vibrate){
+      try{ navigator.vibrate(ms || 10); }catch(e){}
+    }
+  }
+
+  function showScreen(name){
+    Object.keys(screens).forEach(function(key){
+      screens[key].classList.toggle('active', key === name);
+    });
+  }
+
+  function formatTime(sec){
+    if (!isFinite(sec) || sec < 0) return '0:00';
+    sec = Math.round(sec);
+    var m = Math.floor(sec / 60);
+    var s = sec % 60;
+    return m + ':' + (s < 10 ? '0' + s : s);
+  }
+
+  function sleep(ms){
+    return new Promise(function(resolve){ setTimeout(resolve, ms); });
+  }
+
+  function evenify(n){
+    n = Math.round(n);
+    return n % 2 === 0 ? n : n - 1;
+  }
+
+  function applySpeedToSequence(seq, speedFactor){
+    if (speedFactor === 1 || seq.length === 0) return seq;
+    var out = [];
+    if (speedFactor > 1){
+      var step = Math.round(speedFactor);
+      for (var i = 0; i < seq.length; i += step) out.push(seq[i]);
+      if (out.length === 0) out.push(seq[seq.length - 1]);
+    } else {
+      var repeats = Math.round(1 / speedFactor);
+      for (var j = 0; j < seq.length; j++){
+        for (var k = 0; k < repeats; k++) out.push(seq[j]);
+      }
+    }
+    return out;
+  }
+
+  function makeError(code, message){
+    var e = new Error(message || code);
+    e.code = code;
+    return e;
+  }
+
+  function showError(title, message){
+    errorTitle.textContent = title;
+    errorMessage.textContent = message;
+    showScreen('error');
+  }
+
+  function setProgress(pct){
+    var clamped = Math.max(0, Math.min(100, Math.round(pct)));
+    progressFill.style.width = clamped + '%';
+    progressFill.classList.remove('indeterminate');
+    progressLabel.textContent = clamped + '%';
+    progressBar.setAttribute('aria-valuenow', String(clamped));
+  }
+
+  function setIndeterminate(){
+    progressFill.classList.add('indeterminate');
+    progressLabel.textContent = 'Working&hellip;';
+  }
+
+  /* ---------------- Home: choose video ---------------- */
+  btnChooseVideo.addEventListener('click', function(){
+    haptic(8);
+    fileInput.click();
+  });
+
+  fileInput.addEventListener('change', function(e){
+    var file = e.target.files && e.target.files[0];
+    fileInput.value = '';
+    if (!file) return;
+
+    if (file.type && file.type.indexOf('video/') !== 0){
+      showError('Unsupported', "This video format isn't supported by your browser.");
+      return;
+    }
+    if (file.size > MAX_FILE_BYTES){
+      showError('File too large', 'This video is too large to process reliably in your browser.');
+      return;
+    }
+    loadVideoFile(file);
+  });
+
+  function loadVideoFile(file){
+    cleanupSelection();
+    currentFile = file;
+    currentObjectUrl = URL.createObjectURL(file);
+    previewVideo.src = currentObjectUrl;
+
+    previewVideo.onloadedmetadata = function(){
+      resolveDuration(previewVideo).then(function(duration){
+        currentDuration = duration;
+        infoFileName.textContent = file.name;
+        var resText = previewVideo.videoWidth + '\u00D7' + previewVideo.videoHeight;
+        infoResolution.textContent = resText;
+        infoResolution.setAttribute('aria-label', 'Resolution ' + resText);
+        trimStart = 0;
+        trimEnd = duration;
+        previewVideo.currentTime = 0;
+        setSpeed(1);
+        setMode('reverse');
+        showScreen('editor');
+      });
+    };
+    previewVideo.onerror = function(){
+      showError('Unsupported', "This video format isn't supported by your browser.");
+    };
+  }
+
+  function resolveDuration(videoEl){
+    if (isFinite(videoEl.duration)) return Promise.resolve(videoEl.duration);
+    return new Promise(function(resolve){
+      function onTimeUpdate(){
+        videoEl.removeEventListener('timeupdate', onTimeUpdate);
+        var d = isFinite(videoEl.duration) ? videoEl.duration : 0;
+        videoEl.currentTime = 0;
+        resolve(d);
+      }
+      videoEl.addEventListener('timeupdate', onTimeUpdate);
+      videoEl.currentTime = 1e10;
+    });
+  }
+
+  /* ---------------- Trim range + export mode ---------------- */
+  function updateTrimUI(){
+    if (!currentDuration) return;
+    var startPct = (trimStart / currentDuration) * 100;
+    var endPct = (trimEnd / currentDuration) * 100;
+    trimStartHandle.style.left = startPct + '%';
+    trimEndHandle.style.left = endPct + '%';
+    timelineRange.style.left = startPct + '%';
+    timelineRange.style.width = Math.max(0, endPct - startPct) + '%';
+    timelineStart.textContent = formatTime(trimStart);
+    timelineEnd.textContent = formatTime(trimEnd);
+
+    trimStartHandle.setAttribute('aria-valuemax', String(trimEnd));
+    trimStartHandle.setAttribute('aria-valuenow', String(trimStart));
+    trimStartHandle.setAttribute('aria-valuetext', formatTime(trimStart));
+
+    trimEndHandle.setAttribute('aria-valuemin', String(trimStart));
+    trimEndHandle.setAttribute('aria-valuemax', String(currentDuration));
+    trimEndHandle.setAttribute('aria-valuenow', String(trimEnd));
+    trimEndHandle.setAttribute('aria-valuetext', formatTime(trimEnd));
+
+    var selected = Math.max(0, trimEnd - trimStart);
+    var isFullRange = trimStart <= 0.01 && (currentDuration - trimEnd) <= 0.01;
+    selectionDuration.textContent = isFullRange ? '' : (formatTime(selected) + ' selected');
+
+    var modeMultiplier = (mode === 'boomerang') ? 2 : 1;
+    var speedMultiplier = (speed < 1) ? (1 / speed) : 1;
+    var effectiveDuration = selected * modeMultiplier * speedMultiplier;
+    longVideoWarning.hidden = effectiveDuration <= LONG_VIDEO_SECONDS;
+    longVideoWarning.textContent = 'Long selections can take longer to process and use more memory.';
+  }
+
+  function clientXToTime(clientX){
+    var rect = timelineTrack.getBoundingClientRect();
+    var pct = rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
+    pct = Math.max(0, Math.min(1, pct));
+    return pct * currentDuration;
+  }
+
+  function startDrag(which){
+    return function(evt){
+      evt.preventDefault();
+      activeDragHandle = which;
+      var handle = which === 'start' ? trimStartHandle : trimEndHandle;
+      try{ handle.setPointerCapture(evt.pointerId); }catch(e){}
+      haptic(6);
+    };
+  }
+
+  function onDragMove(evt){
+    if (!activeDragHandle || !currentDuration) return;
+    evt.preventDefault();
+    var t = clientXToTime(evt.clientX);
+    if (activeDragHandle === 'start'){
+      trimStart = Math.max(0, Math.min(t, trimEnd - MIN_TRIM_SECONDS));
+      previewVideo.currentTime = trimStart;
+    } else {
+      trimEnd = Math.min(currentDuration, Math.max(t, trimStart + MIN_TRIM_SECONDS));
+      previewVideo.currentTime = trimEnd;
+    }
+    updateTrimUI();
+  }
+
+  function endDrag(){
+    activeDragHandle = null;
+  }
+
+  trimStartHandle.addEventListener('pointerdown', startDrag('start'));
+  trimEndHandle.addEventListener('pointerdown', startDrag('end'));
+  window.addEventListener('pointermove', onDragMove);
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  function nudgeTrim(which, deltaSeconds){
+    if (which === 'start'){
+      trimStart = Math.max(0, Math.min(trimStart + deltaSeconds, trimEnd - MIN_TRIM_SECONDS));
+      previewVideo.currentTime = trimStart;
+    } else {
+      trimEnd = Math.min(currentDuration, Math.max(trimEnd + deltaSeconds, trimStart + MIN_TRIM_SECONDS));
+      previewVideo.currentTime = trimEnd;
+    }
+    updateTrimUI();
+  }
+
+  function handleTrimKeydown(which){
+    return function(e){
+      var step = e.shiftKey ? 1 : 0.1;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown'){
+        nudgeTrim(which, -step);
+        e.preventDefault();
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp'){
+        nudgeTrim(which, step);
+        e.preventDefault();
+      } else if (e.key === 'Home'){
+        if (which === 'start'){ trimStart = 0; } else { trimEnd = Math.min(currentDuration, trimStart + MIN_TRIM_SECONDS); }
+        updateTrimUI();
+        e.preventDefault();
+      } else if (e.key === 'End'){
+        if (which === 'end'){ trimEnd = currentDuration; } else { trimStart = Math.max(0, trimEnd - MIN_TRIM_SECONDS); }
+        updateTrimUI();
+        e.preventDefault();
+      }
+    };
+  }
+  trimStartHandle.addEventListener('keydown', handleTrimKeydown('start'));
+  trimEndHandle.addEventListener('keydown', handleTrimKeydown('end'));
+
+  function setMode(newMode){
+    mode = newMode;
+    modeReverseBtn.classList.toggle('active', mode === 'reverse');
+    modeReverseBtn.setAttribute('aria-checked', mode === 'reverse' ? 'true' : 'false');
+    modeBoomerangBtn.classList.toggle('active', mode === 'boomerang');
+    modeBoomerangBtn.setAttribute('aria-checked', mode === 'boomerang' ? 'true' : 'false');
+    btnReverse.textContent = mode === 'boomerang' ? 'Create Boomerang' : 'Reverse Video';
+    updateTrimUI();
+  }
+  modeReverseBtn.addEventListener('click', function(){ haptic(8); setMode('reverse'); });
+  modeBoomerangBtn.addEventListener('click', function(){ haptic(8); setMode('boomerang'); });
+
+  function setSpeed(newSpeed){
+    speed = newSpeed;
+    var buttons = speedToggle.querySelectorAll('.mode-option');
+    for (var i = 0; i < buttons.length; i++){
+      var btnSpeed = parseFloat(buttons[i].getAttribute('data-speed'));
+      var isActive = btnSpeed === speed;
+      buttons[i].classList.toggle('active', isActive);
+      buttons[i].setAttribute('aria-checked', isActive ? 'true' : 'false');
+    }
+    updateTrimUI();
+  }
+  speedToggle.addEventListener('click', function(e){
+    var btn = e.target.closest ? e.target.closest('.mode-option') : null;
+    if (!btn) return;
+    haptic(8);
+    setSpeed(parseFloat(btn.getAttribute('data-speed')));
+  });
+
+  /* ---------------- Navigation ---------------- */
+  btnBack.addEventListener('click', resetToHome);
+  btnErrorBack.addEventListener('click', resetToHome);
+  btnChooseAnother.addEventListener('click', function(){
+    revokeResult();
+    resetToHome();
+  });
+
+  btnReverseAgain.addEventListener('click', function(){
+    previewVideo.pause();
+    previewVideo.currentTime = 0;
+    showScreen('editor');
+  });
+
+  function resetToHome(){
+    cleanupSelection();
+    revokeResult();
+    showScreen('home');
+  }
+
+  function cleanupSelection(){
+    if (currentObjectUrl){
+      URL.revokeObjectURL(currentObjectUrl);
+      currentObjectUrl = null;
+    }
+    currentFile = null;
+    currentDuration = 0;
+    previewVideo.removeAttribute('src');
+    previewVideo.load();
+  }
+
+  function revokeResult(){
+    if (resultObjectUrl){
+      URL.revokeObjectURL(resultObjectUrl);
+      resultObjectUrl = null;
+    }
+    resultVideo.removeAttribute('src');
+  }
+
+  /* ---------------- Feature detection ---------------- */
+  function checkSupport(){
+    return !!(window.MediaRecorder &&
+      document.createElement('canvas').captureStream &&
+      window.createImageBitmap);
+  }
+
+  function pickMimeType(){
+    if (!window.MediaRecorder || typeof MediaRecorder.isTypeSupported !== 'function') return null;
+    var candidates = [
+      'video/webm;codecs=vp9,opus',
+      'video/webm;codecs=vp8,opus',
+      'video/webm;codecs=vp9',
+      'video/webm;codecs=vp8',
+      'video/webm',
+      'video/mp4'
+    ];
+    for (var i = 0; i < candidates.length; i++){
+      if (MediaRecorder.isTypeSupported(candidates[i])) return candidates[i];
+    }
+    return null;
+  }
+
+  /* ---------------- Seeking helper ---------------- */
+  function seekTo(videoEl, time){
+    return new Promise(function(resolve, reject){
+      if (Math.abs(videoEl.currentTime - time) < 0.02){
+        resolve();
+        return;
+      }
+      var settled = false;
+      var timer = setTimeout(function(){
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      }, 2000);
+
+      function onSeeked(){
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve();
+      }
+      function onError(){
+        if (settled) return;
+        settled = true;
+        cleanup();
+        reject(makeError('SEEK_ERROR'));
+      }
+      function cleanup(){
+        clearTimeout(timer);
+        videoEl.removeEventListener('seeked', onSeeked);
+        videoEl.removeEventListener('error', onError);
+      }
+      videoEl.addEventListener('seeked', onSeeked, { once: true });
+      videoEl.addEventListener('error', onError, { once: true });
+      try{
+        videoEl.currentTime = time;
+      }catch(err){
+        settled = true;
+        cleanup();
+        reject(makeError('SEEK_ERROR'));
+      }
+    });
+  }
+
+  function waitForLoadedMetadata(videoEl){
+    return new Promise(function(resolve, reject){
+      videoEl.addEventListener('loadedmetadata', function(){ resolve(); }, { once: true });
+      videoEl.addEventListener('error', function(){ reject(makeError('PROCESS_FAILED')); }, { once: true });
+    });
+  }
+
+  /* ---------------- Processing controls ---------------- */
+  btnReverse.addEventListener('click', startProcessing);
+
+  btnCancel.addEventListener('click', function(){
+    if (cancelled) return;
+    haptic(10);
+    cancelled = true;
+    btnCancel.disabled = true;
+    btnCancel.textContent = 'Cancelling\u2026';
+  });
+
+  function startProcessing(){
+    if (processing) return;
+    processing = true;
+    cancelled = false;
+    resultMode = mode;
+    btnReverse.disabled = true;
+    btnCancel.disabled = false;
+    btnCancel.textContent = 'Cancel';
+    processingStatus.textContent = mode === 'boomerang' ? 'Creating boomerang\u2026' : 'Reversing video\u2026';
+    haptic(12);
+
+    processingVideoContext.src = currentObjectUrl;
+    processingVideoContext.currentTime = trimStart;
+
+    showScreen('processing');
+    setProgress(0);
+
+    runReverseEngine()
+      .catch(function(err){
+        console.error(err);
+        handleProcessingError(err);
+      })
+      .then(function(){
+        processing = false;
+        btnReverse.disabled = false;
+      });
+  }
+
+  function handleProcessingError(err){
+    var code = err && err.code;
+    if (code === 'UNSUPPORTED'){
+      showError('Unsupported', "This browser can't export this video format yet. Try Chrome or another modern browser.");
+    } else {
+      showError('Processing failed', "We couldn't reverse this video. Try a shorter or different video.");
+    }
+  }
+
+  /* ---------------- Core reverse engine ---------------- */
+  function runReverseEngine(){
+    var extractVideo = null;
+    var audioCtx = null;
+    var frames = [];
+    var recorder = null;
+    var audioSource = null;
+    var currentMode = resultMode;
+    var currentSpeed = speed;
+
+    function cleanupAll(){
+      frames.forEach(function(f){ try{ f.close(); }catch(e){} });
+      frames.length = 0;
+      if (extractVideo){
+        try{ extractVideo.pause(); }catch(e){}
+        try{ extractVideo.removeAttribute('src'); extractVideo.load(); }catch(e){}
+        if (extractVideo.parentNode) extractVideo.parentNode.removeChild(extractVideo);
+      }
+      if (audioCtx){
+        try{ audioCtx.close(); }catch(e){}
+      }
+    }
+
+    if (!checkSupport() || !pickMimeType()){
+      cleanupAll();
+      return Promise.reject(makeError('UNSUPPORTED'));
+    }
+    var mimeType = pickMimeType();
+
+    var rangeStart = Math.max(0, Math.min(trimStart, currentDuration));
+    var rangeEnd = Math.max(rangeStart + 0.05, Math.min(trimEnd, currentDuration));
+    var duration = rangeEnd - rangeStart;
+    var srcW = previewVideo.videoWidth;
+    var srcH = previewVideo.videoHeight;
+
+    if (!duration || !isFinite(duration) || duration <= 0 || !srcW || !srcH){
+      cleanupAll();
+      return Promise.reject(makeError('PROCESS_FAILED'));
+    }
+
+    var scale = Math.min(1, MAX_DIM / Math.max(srcW, srcH));
+    var outW = Math.max(2, evenify(srcW * scale));
+    var outH = Math.max(2, evenify(srcH * scale));
+
+    var seqMultiplier = (currentMode === 'boomerang') ? 2 : 1;
+    var speedMultiplier = (currentSpeed < 1) ? Math.round(1 / currentSpeed) : 1;
+    var totalMultiplier = seqMultiplier * speedMultiplier;
+    var fps = DEFAULT_FPS;
+    var totalFrames = Math.max(1, Math.round(duration * fps));
+    if (totalFrames * totalMultiplier > MAX_FRAMES){
+      fps = Math.max(MIN_FPS, Math.floor(MAX_FRAMES / (duration * totalMultiplier)));
+      totalFrames = Math.max(1, Math.round(duration * fps));
+    }
+
+    extractVideo = document.createElement('video');
+    extractVideo.muted = true;
+    extractVideo.playsInline = true;
+    extractVideo.preload = 'auto';
+    extractVideo.style.cssText = 'position:fixed;left:-9999px;top:-9999px;width:2px;height:2px;opacity:0;';
+    extractVideo.src = currentObjectUrl;
+    document.body.appendChild(extractVideo);
+
+    return waitForLoadedMetadata(extractVideo).then(function(){
+      var exCanvas = document.createElement('canvas');
+      exCanvas.width = outW;
+      exCanvas.height = outH;
+      var exCtx = exCanvas.getContext('2d', { alpha: false });
+
+      var i = 0;
+      function extractLoop(){
+        if (cancelled) return Promise.resolve();
+        if (i >= totalFrames) return Promise.resolve();
+        var t = Math.max(rangeStart, Math.min(rangeEnd - 0.03, rangeStart + i / fps));
+        return seekTo(extractVideo, t).then(function(){
+          exCtx.drawImage(extractVideo, 0, 0, outW, outH);
+          return createImageBitmap(exCanvas);
+        }).then(function(bmp){
+          frames.push(bmp);
+          setProgress(((i + 1) / totalFrames) * 50);
+          i++;
+          return extractLoop();
+        });
+      }
+
+      return extractLoop();
+    }).then(function(){
+      if (cancelled) return null;
+
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return { hasAudio: false, finalBuf: null };
+
+      audioCtx = new AC();
+      var resumeP = audioCtx.state === 'suspended' ? audioCtx.resume().catch(function(){}) : Promise.resolve();
+
+      return resumeP.then(function(){
+        return currentFile.arrayBuffer();
+      }).then(function(arrBuf){
+        return audioCtx.decodeAudioData(arrBuf);
+      }).then(function(decoded){
+        var sr = decoded.sampleRate;
+        var chCount = decoded.numberOfChannels;
+        var startSample = Math.max(0, Math.min(decoded.length, Math.floor(rangeStart * sr)));
+        var endSample = Math.max(startSample + 1, Math.min(decoded.length, Math.ceil(rangeEnd * sr)));
+        var segLen = endSample - startSample;
+
+        var finalBuf;
+        if (currentMode === 'boomerang'){
+          finalBuf = audioCtx.createBuffer(chCount, segLen * 2, sr);
+          for (var ch = 0; ch < chCount; ch++){
+            var full = decoded.getChannelData(ch);
+            var seg = full.slice(startSample, endSample);
+            var revSeg = seg.slice();
+            revSeg.reverse();
+            var combo = new Float32Array(segLen * 2);
+            combo.set(seg, 0);
+            combo.set(revSeg, segLen);
+            finalBuf.copyToChannel(combo, ch);
+          }
+        } else {
+          finalBuf = audioCtx.createBuffer(chCount, segLen, sr);
+          for (var ch2 = 0; ch2 < chCount; ch2++){
+            var seg2 = decoded.getChannelData(ch2).slice(startSample, endSample);
+            seg2.reverse();
+            finalBuf.copyToChannel(seg2, ch2);
+          }
+        }
+        return { hasAudio: true, finalBuf: finalBuf };
+      }).catch(function(){
+        return { hasAudio: false, finalBuf: null };
+      });
+    }).then(function(audioResult){
+      if (cancelled || !audioResult) return null;
+      var hasAudio = audioResult.hasAudio;
+      var finalBuf = audioResult.finalBuf;
+
+      var sequence = [];
+      if (currentMode === 'boomerang'){
+        for (var a = 0; a < frames.length; a++) sequence.push(a);
+        for (var b = frames.length - 2; b >= 0; b--) sequence.push(b);
+      } else {
+        for (var c = frames.length - 1; c >= 0; c--) sequence.push(c);
+      }
+      sequence = applySpeedToSequence(sequence, currentSpeed);
+
+      var recCanvas = document.createElement('canvas');
+      recCanvas.width = outW;
+      recCanvas.height = outH;
+      var recCtx = recCanvas.getContext('2d', { alpha: false });
+      recCtx.drawImage(frames[sequence[0]], 0, 0, outW, outH);
+
+      var tracks = recCanvas.captureStream(fps).getVideoTracks().slice();
+      var audioDest = null;
+      if (hasAudio && audioCtx){
+        audioDest = audioCtx.createMediaStreamDestination();
+        audioSource = audioCtx.createBufferSource();
+        audioSource.buffer = finalBuf;
+        audioSource.playbackRate.value = currentSpeed;
+        audioSource.connect(audioDest);
+        tracks = tracks.concat(audioDest.stream.getAudioTracks());
+      }
+
+      var combined = new MediaStream(tracks);
+      var chunks = [];
+      recorder = new MediaRecorder(combined, { mimeType: mimeType });
+      recorder.ondataavailable = function(e){
+        if (e.data && e.data.size > 0) chunks.push(e.data);
+      };
+      var stopped = new Promise(function(resolve){
+        recorder.onstop = function(){ resolve(); };
+        recorder.onerror = function(){ resolve(); };
+      });
+
+      recorder.start();
+      if (audioSource) audioSource.start();
+
+      var interval = 1000 / fps;
+      var seqPos = 0;
+
+      var playbackDone = new Promise(function(resolve){
+        function tick(){
+          if (cancelled || seqPos >= sequence.length){ resolve(); return; }
+          recCtx.drawImage(frames[sequence[seqPos]], 0, 0, outW, outH);
+          setProgress(50 + ((seqPos + 1) / sequence.length) * 50);
+          seqPos++;
+          setTimeout(tick, interval);
+        }
+        tick();
+      });
+
+      return playbackDone.then(function(){
+        return sleep(Math.max(200, interval * 2));
+      }).then(function(){
+        if (audioSource){ try{ audioSource.stop(); }catch(e){} }
+        if (recorder.state !== 'inactive'){ try{ recorder.stop(); }catch(e){} }
+        return stopped;
+      }).then(function(){
+        if (cancelled) return null;
+        if (chunks.length === 0) throw makeError('PROCESS_FAILED');
+        var blob = new Blob(chunks, { type: mimeType.split(';')[0] });
+        revokeResult();
+        resultObjectUrl = URL.createObjectURL(blob);
+        resultExtension = mimeType.indexOf('mp4') !== -1 ? 'mp4' : 'webm';
+        setProgress(100);
+        showResult(hasAudio);
+        return null;
+      });
+    }).then(function(){
+      cleanupAll();
+      if (cancelled){
+        setProgress(0);
+        showScreen('editor');
+      }
+    }, function(err){
+      cleanupAll();
+      throw err;
+    });
+  }
+
+  function showResult(hasAudio){
+    resultVideo.src = resultObjectUrl;
+    noAudioNote.hidden = !!hasAudio;
+    showScreen('result');
+  }
+
+  /* ---------------- Download ---------------- */
+  btnDownload.addEventListener('click', function(){
+    if (!resultObjectUrl || !currentFile) return;
+    haptic(10);
+    var base = currentFile.name.replace(/\.[^.\/]+$/, '') || 'video';
+    var suffix = resultMode === 'boomerang' ? '-boomerang.' : '-reversed.';
+    var a = document.createElement('a');
+    a.href = resultObjectUrl;
+    a.download = base + suffix + resultExtension;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  });
+
+})();
+</script>
+</body>
+</html>
