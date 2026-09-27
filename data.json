@@ -2,18 +2,19 @@
   "tools": [
     {
       "name": "SvgToXmlAm",
-      "description": "Convert SVG jadi format XML buat Alight Motion.",
-      "thumbnail": "https://example.com/svg-to-xml.png"
+      "description": "Convert SVG jadi format XML buat Alight Motion."
     },
     {
       "name": "AmTextGenerator",
-      "description": "Membuat text animation untuk Alight Motion.",
-      "thumbnail": "https://example.com/text-generator.png"
+      "description": "Membuat text animation untuk Alight Motion."
     },
     {
       "name": "BackgroundGenerator",
-      "description": "Membuat background untuk kebutuhan editing.",
-      "thumbnail": "https://example.com/background.png"
+      "description": "Membuat background untuk kebutuhan editing."
+    },
+    {
+      "name": "ReverseVideo",
+      "description": "Membalik video sehingga video diputar dari akhir ke awal."
     }
   ]
 }
