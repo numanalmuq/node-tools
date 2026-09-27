@@ -5,10 +5,5 @@
       "description": "Convert SVG jadi format XML buat Alight Motion.",
       "thumbnail": ""
     }
-    {
-      "name": "SvgToXmlAm",
-      "description": "Convert SVG jadi format XML buat Alight Motion.",
-      "thumbnail": ""      
-    }
   ]
 }
