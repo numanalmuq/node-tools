@@ -14,6 +14,8 @@
   NODE TOOLS — engine. Gak perlu diedit lagi buat nambah tool baru.
   Tambah tool: buat tools/<slug>.html (taruh <script src="../guard.js"></script> PALING ATAS <head>-nya), lalu isi data.json (name, description, thumbnail).
 
+  Field OPSIONAL di data.json (boleh gak diisi): category (warna ikon per kategori), tag ("Populer"/"Baru"), steps (maks 3 langkah cara pakai).
+
   UI/UX file ini udah dirombak total ngikutin wireframe Neo-Brutalism (bottom nav, menu drawer, list tools,
   stat card admin, dll) TAPI seluruh logika di bawah (Firebase, timer, streak, admin grant) PERSIS SAMA
   kayak sebelumnya -- cuma ada beberapa baris kecil tambahan (bukan perubahan) buat nyambungin elemen UI
@@ -171,6 +173,7 @@
       const alive = lastClaimDay === today || lastClaimDay === today - 1;
       list.push({
         email: d.email || '(tanpa email)',
+        lastClaimDay,
         streak: alive ? Number(d.streak || 0) : 0,
         remainMs: Math.max(0, Math.max(Number(d.freeUntil || 0), Number(d.bonusUntil || 0)) - now)
       });
@@ -402,6 +405,57 @@ a.gate-btn{text-decoration:none}
 .ul-status.active{background:var(--blue);border-color:var(--blue);color:#fff}
 .ul-status.inactive{background:var(--line);border-color:var(--line);color:#57554f}
 
+/* Intro: splash + onboarding (sekali per perangkat, bisa dilewati) */
+.no-top .top{display:none}
+.intro{min-height:82vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;padding:1.5rem 0}
+.splash .logomark{width:6.2rem;height:6.2rem;font-size:3rem;border-radius:22%;box-shadow:6px 6px 0 var(--ink);animation:pop .45s steps(4)}
+@keyframes pop{from{transform:scale(.55) rotate(-10deg)}}
+.ob{align-items:stretch;text-align:left}
+.ob-art{display:grid;place-items:center;aspect-ratio:1.5;background:var(--c);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink)}
+.ob-art .ic{width:4.6rem;height:4.6rem}
+.ob h2{margin:.5rem 0 0;font:900 1.7rem/1.05 var(--sans);letter-spacing:-.02em}
+.ob p{margin:0;font-size:.86rem;color:#43413e}
+.dots{display:flex;gap:.5rem;margin:.3rem 0}
+.dots i{width:.7rem;height:.7rem;background:#fff;border:2.5px solid var(--ink)}
+.dots i.on{width:1.9rem;background:var(--ink)}
+.ob-row{display:flex;align-items:center;gap:1.2rem;margin-top:.6rem}
+.ob-row .gate-btn{flex:1}
+
+/* Daftar tools: chip filter, tag, favorit */
+.chips{display:flex;gap:.6rem;margin:0 0 1.2rem;padding:0 6px 6px 0;overflow-x:auto}
+.fchip{flex:none;padding:.4rem .85rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);font:800 .76rem var(--sans);cursor:pointer}
+.fchip.on{background:var(--ink);color:#fff}
+.card{cursor:pointer}
+.tag{align-self:flex-start;padding:.05rem .45rem;background:var(--yellow);border:2px solid var(--ink);font:800 .62rem var(--sans)}
+.tag.new{background:var(--blue);color:#fff}
+.fav{flex:none;display:grid;place-items:center;width:2rem;height:2rem;margin-right:.3rem;padding:0;background:none;border:0;color:var(--ink);cursor:pointer}
+.fav.on .ic,.iconbtn.on .ic{fill:var(--yellow)}
+
+/* Detail tool */
+.dt-hero{display:flex;align-items:center;gap:1rem;margin:0 0 1.1rem}
+.dt-hero .thumb{width:4.6rem;height:4.6rem}
+.dt-hero h2{margin:0 0 .45rem;font:900 1.5rem/1.05 var(--sans);letter-spacing:-.02em;overflow-wrap:anywhere}
+.dt-desc{margin:0 0 .4rem;font-size:.88rem}
+.pf-h{margin:1.5rem 0 .7rem;font:900 1rem var(--sans)}
+.steps{display:flex;flex-direction:column;gap:.7rem;margin:0 0 1.6rem;padding:0;list-style:none;counter-reset:s}
+.steps li{counter-increment:s;display:flex;align-items:center;gap:.8rem;padding:.7rem .9rem;background:var(--card);border:3px solid var(--ink);font-size:.82rem}
+.steps li::before{content:counter(s);flex:none;display:grid;place-items:center;width:1.7rem;height:1.7rem;background:var(--yellow);border:2.5px solid var(--ink);font:900 .9rem var(--sans)}
+
+/* Profil */
+.pf-head{display:flex;align-items:center;gap:1rem;margin:0 0 1.3rem}
+.pf-head .menu-avatar{width:3.6rem;height:3.6rem;margin:0}
+.pf-mail{margin:0 0 .5rem;font-size:.8rem;overflow-wrap:anywhere}
+.pf-head .rolechip{margin:0}
+.row{display:flex;align-items:center;gap:.8rem;width:100%;padding:.75rem .9rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);border-bottom-width:0;font:800 .84rem var(--sans);text-align:left;text-decoration:none;cursor:pointer}
+.row:last-child{border-bottom-width:3px}
+.row small{margin-left:auto;font:500 .66rem var(--mono);color:#6b6a68}
+
+/* Dashboard admin: grafik */
+.chart{display:flex;align-items:flex-end;gap:3px;height:9rem;padding:.8rem .7rem 0;background:var(--card);border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink)}
+.chart i{flex:1;min-height:3px;background:var(--yellow);border:2px solid var(--ink);border-bottom:0}
+.chart-cap{margin:.8rem 0 1.4rem;font-size:.7rem;color:#6b6a68}
+.seg{display:flex;gap:.5rem}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -422,6 +476,7 @@ a.gate-btn{text-decoration:none}
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></symbol>
   <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 9.5v5"/><circle cx="12" cy="17.2" r="1.1" fill="currentColor"/></symbol>
   <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2Q18 7 17 13Q17 19 12 21Q7 19 7 13Q6 7 12 2Z"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></symbol>
 </defs></svg>
 
 <div class="wrap top">
@@ -441,6 +496,8 @@ a.gate-btn{text-decoration:none}
       <nav class="menu-list">
         <button id="menuHome" type="button"><svg class="ic"><use href="#i-home"/></svg>Beranda</button>
         <button id="menuTools" type="button"><svg class="ic"><use href="#i-tools"/></svg>Semua Tools</button>
+        <button id="menuProfile" type="button"><svg class="ic"><use href="#i-user"/></svg>Profil</button>
+        <button id="menuDash" type="button" hidden><svg class="ic"><use href="#i-cal"/></svg>Dashboard Admin</button>
         <button id="menuAdd" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg>Tambah Akses</button>
         <button id="menuOut" type="button"><svg class="ic"><use href="#i-arrow"/></svg>Keluar</button>
       </nav>
@@ -450,6 +507,20 @@ a.gate-btn{text-decoration:none}
 </div>
 
 <main class="wrap">
+
+  <section id="screen-splash" class="intro splash" hidden>
+    <span class="logomark">N</span>
+    <h1 class="login-title" style="margin:0">Node Tools</h1>
+    <p class="login-sub" style="margin:0">Tiny tools. Real work.</p>
+  </section>
+
+  <section id="screen-onboard" class="intro ob" hidden>
+    <div id="obArt" class="ob-art"><svg class="ic"><use id="obUse" href="#i-tools"/></svg></div>
+    <h2 id="obTitle"></h2>
+    <p id="obText"></p>
+    <div id="obDots" class="dots" aria-hidden="true"></div>
+    <div class="ob-row"><button id="obSkip" class="link-btn" type="button">Lewati</button><button id="obNext" class="gate-btn" type="button">Lanjut</button></div>
+  </section>
 
   <section id="screen-checking" class="gate-wrap">
     <div class="gate">
@@ -515,6 +586,7 @@ a.gate-btn{text-decoration:none}
       <p class="wa-line"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA)<svg class="ic"><use href="#i-arrow"/></svg></a></p>
     </section>
 
+    <button id="dashBtn" class="act" type="button" hidden><svg class="ic"><use href="#i-cal"/></svg><span>Dashboard Admin</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="addBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="allBtn" class="act" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Lihat Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
   </section>
@@ -529,8 +601,66 @@ a.gate-btn{text-decoration:none}
       <svg class="ic"><use href="#i-search"/></svg>
       <input id="q" type="search" placeholder="Cari tools..." aria-label="Cari tools" autocomplete="off" spellcheck="false">
     </label>
+    <div class="chips" role="group" aria-label="Filter tools">
+      <button class="fchip on" type="button" data-m="all">Semua</button>
+      <button class="fchip" type="button" data-m="fav">Favorit</button>
+      <button class="fchip" type="button" data-m="new">Terbaru</button>
+    </div>
     <div id="state" class="state loading" role="status">Memuat tools...</div>
     <section id="grid" class="grid" aria-label="Tools"></section>
+  </section>
+
+  <section id="screen-detail" hidden>
+    <div class="bar">
+      <button id="dtBack" class="iconbtn" type="button" aria-label="Kembali ke daftar tools"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
+      <h2>Detail Tool</h2>
+      <button id="dtFav" class="iconbtn" type="button" aria-label="Favorit"><svg class="ic"><use href="#i-star"/></svg></button>
+    </div>
+    <div class="dt-hero"><div id="dtThumb" class="thumb"></div><div><h2 id="dtName"></h2><span id="dtTag" class="tag" hidden></span></div></div>
+    <p id="dtDesc" class="dt-desc"></p>
+    <h3 class="pf-h">Cara pakai</h3>
+    <ol id="dtSteps" class="steps"></ol>
+    <a id="dtGo" class="gate-btn" href="#"><span>Pakai Sekarang</span><svg class="ic"><use href="#i-arrow"/></svg></a>
+  </section>
+
+  <section id="screen-profile" hidden>
+    <div class="bar"><h2>Profil</h2></div>
+    <div class="pf-head">
+      <span class="menu-avatar"><svg class="ic"><use href="#i-user"/></svg></span>
+      <div><p id="pfMail" class="pf-mail"></p><span id="pfRole" class="rolechip member">Member</span></div>
+    </div>
+    <div id="pfStreak" class="timer-card">
+      <div class="timer-card-head"><span>Streak harian</span><span class="timer-streak"><svg class="ic"><use href="#i-flame"/></svg><b id="pfDays">0</b><span>hari</span></span></div>
+      <p id="pfNext" class="timer-hint" style="margin:0"></p>
+    </div>
+    <h3 class="pf-h">Riwayat pemakaian</h3>
+    <div id="pfHist"></div>
+    <h3 class="pf-h">Pengaturan dan bantuan</h3>
+    <div>
+      <button id="pfGuide" class="row" type="button"><svg class="ic"><use href="#i-info"/></svg>Lihat panduan awal</button>
+      <button id="pfClear" class="row" type="button"><svg class="ic"><use href="#i-close"/></svg>Hapus riwayat</button>
+      <a id="pfHelp" class="row" target="_blank" rel="noopener" href="#"><svg class="ic"><use href="#i-chat"/></svg>Bantuan lewat WhatsApp</a>
+    </div>
+    <button id="pfOut" class="act" type="button" style="margin-top:1.5rem"><svg class="ic"><use href="#i-arrow"/></svg><span>Keluar</span></button>
+  </section>
+
+  <section id="screen-admin" hidden>
+    <div class="bar">
+      <button id="adBack" class="iconbtn" type="button" aria-label="Kembali ke beranda"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
+      <h2>Dashboard Admin</h2>
+    </div>
+    <div class="stats">
+      <div class="stat"><span class="stat-ic y"><svg class="ic"><use href="#i-user"/></svg></span><span class="stat-label">Total Member</span><b id="dMembers">…</b></div>
+      <div class="stat"><span class="stat-ic b"><svg class="ic"><use href="#i-clock"/></svg></span><span class="stat-label">Total Jam Tersisa</span><b id="dHours">…</b></div>
+      <div class="stat"><span class="stat-ic i"><svg class="ic"><use href="#i-cal"/></svg></span><span class="stat-label">Klaim Hari Ini</span><b id="dToday">…</b></div>
+    </div>
+    <button id="dAdd" class="act y" type="button"><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Waktu ke Member</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+    <div class="bar">
+      <h2 style="font-size:1.1rem">Klaim terakhir per hari</h2>
+      <div class="seg"><button class="fchip on" type="button" data-r="7">7 hari</button><button class="fchip" type="button" data-r="30">30 hari</button></div>
+    </div>
+    <div id="chart" class="chart" role="img" aria-label="Grafik klaim terakhir member per hari"></div>
+    <p id="chartCap" class="chart-cap">Memuat...</p>
   </section>
 
 </main>
@@ -572,9 +702,15 @@ a.gate-btn{text-decoration:none}
   const grid = document.getElementById('grid');
   const stateEl = document.getElementById('state');
   const input = document.getElementById('q');
-  const COLORS = ['--yellow', '--blue', '--white'];
+  const COLORS = ['--yellow', '--blue', '--green', '--red', '--white'];
   let tools = [];
   let loaded = false;
+  // Penyimpanan lokal per perangkat (favorit, riwayat pemakaian, status onboarding)
+  const store = {
+    get: (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } },
+    set: (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
+  };
+  let favs = store.get('nt_fav', []), mode = 'all', cur = null;
 
   // Normalisasi teks: hilangkan aksen + lowercase (dipakai untuk search & slug)
   const norm = s => String(s ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -606,11 +742,9 @@ a.gate-btn{text-decoration:none}
     stateEl.hidden = false;
   };
 
-  function buildCard(t) {
-    const card = el('article', 'card');
-    card.style.setProperty('--c', 'var(' + COLORS[t.i % COLORS.length] + ')');
-
+  function mkThumb(t) {
     const thumb = el('div', 'thumb');
+    thumb.style.setProperty('--c', 'var(' + t.c + ')');
     const ph = el('span', 'ph', Array.from(t.name)[0].toUpperCase());
     thumb.append(ph);
     if (t.thumb) {
@@ -622,17 +756,26 @@ a.gate-btn{text-decoration:none}
       img.src = t.thumb;
       thumb.append(img);
     }
+    return thumb;
+  }
 
+  function buildCard(t) {
+    const card = el('article', 'card');
+    card.tabIndex = 0;
+    card.setAttribute('role', 'button');
+    card.setAttribute('aria-label', 'Lihat detail: ' + t.name);
     const body = el('div', 'body');
     body.append(el('h2', null, t.name));
     if (t.desc) body.append(el('p', null, t.desc));
-    const btn = el('a', 'btn');
-    btn.append(document.createTextNode('Buka Tool'), svgUse('i-arrow', 'ic'));
-    btn.href = t.href;
-    btn.setAttribute('aria-label', 'Buka tool: ' + t.name);
-    body.append(btn);
-
-    card.append(thumb, body);
+    if (t.label) body.append(el('span', 'tag' + (t.label === 'Baru' ? ' new' : ''), t.label));
+    const fav = el('button', 'fav');
+    fav.type = 'button';
+    fav.setAttribute('aria-label', 'Favorit: ' + t.name);
+    fav.append(svgUse('i-star', 'ic'));
+    fav.addEventListener('click', e => { e.stopPropagation(); setFav(t); });
+    card.append(mkThumb(t), body, fav);
+    card.addEventListener('click', () => openDetail(t));
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target === card) openDetail(t); });
     return card;
   }
 
@@ -640,12 +783,12 @@ a.gate-btn{text-decoration:none}
     const terms = norm(input.value).split(/\s+/).filter(Boolean);
     let shown = 0;
     for (const t of tools) {
-      const ok = terms.every(w => t.hay.includes(w));
+      const ok = terms.every(w => t.hay.includes(w)) && (mode === 'all' || (mode === 'fav' ? favs.includes(t.name) : t.fresh));
       t.node.hidden = !ok;
       if (ok) shown++;
     }
     if (shown) stateEl.hidden = true;
-    else setState('empty', 'Tools gak ketemu.');
+    else setState('empty', mode === 'fav' && !terms.length ? 'Belum ada favorit. Tap bintang di tool.' : 'Tools gak ketemu.');
   }
 
   async function load() {
@@ -658,16 +801,24 @@ a.gate-btn{text-decoration:none}
       const data = await res.json();
       if (!data || !Array.isArray(data.tools)) throw new Error('data.json harus berbentuk {"tools": [...]}');
 
+      const N = data.tools.length, cats = [];
       tools = data.tools.flatMap((t, i) => {
         const name = String(t?.name ?? '').trim();
         const slug = slugify(name);
         if (!slug) return [];
         const desc = String(t?.description ?? '').trim();
+        const cat = String(t?.category ?? '').trim().toLowerCase();
+        const tg = String(t?.tag ?? '').trim().toLowerCase();
+        const tag = tg === 'populer' ? 'Populer' : tg === 'baru' ? 'Baru' : '';
+        const fresh = N > 3 && i >= N - 3;
         const o = {
           i, name, desc,
           thumb: String(t?.thumbnail ?? '').trim(),
           href: 'tools/' + encodeURIComponent(slug) + '.html',
-          hay: norm(name + ' ' + desc)
+          hay: norm(name + ' ' + desc),
+          c: COLORS[(cat ? (cats.includes(cat) ? cats.indexOf(cat) : cats.push(cat) - 1) : i) % COLORS.length],
+          fresh, label: tag || (fresh ? 'Baru' : ''),
+          steps: Array.isArray(t?.steps) ? t.steps.slice(0, 3).map(x => String(x)) : []
         };
         o.node = buildCard(o);
         return [o];
@@ -675,6 +826,7 @@ a.gate-btn{text-decoration:none}
 
       if (!tools.length) return setState('empty', 'Belum ada tools.');
       grid.append(...tools.map(t => t.node));
+      tools.forEach(paintFav);
       filter();
     } catch (err) {
       console.error('[Node Tools]', err);
@@ -684,10 +836,15 @@ a.gate-btn{text-decoration:none}
   }
 
   input.addEventListener('input', () => { if (tools.length) filter(); });
+  document.querySelectorAll('.fchip[data-m]').forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.m;
+    document.querySelectorAll('.fchip[data-m]').forEach(x => x.classList.toggle('on', x === b));
+    if (tools.length) filter();
+  }));
 
   // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
   const $ = id => document.getElementById(id);
-  const screens = { checking: $('screen-checking'), login: $('screen-login'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
+  const screens = { checking: $('screen-checking'), login: $('screen-login'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools'), splash: $('screen-splash'), onboard: $('screen-onboard'), detail: $('screen-detail'), profile: $('screen-profile'), admin: $('screen-admin') };
   const menuWrap = $('menuWrap'), menuBtn = $('menuBtn'), menu = $('menu');
   const bottomNav = $('bottomNav'), navHome = $('navHome'), navTools = $('navTools'), navProfile = $('navProfile');
   const adminPanel = $('adminPanel'), adminForm = $('adminForm'), adminMsg = $('adminMsg');
@@ -697,18 +854,21 @@ a.gate-btn{text-decoration:none}
 
   let countdownTimer = null, authResolved = false, statsLoaded = false;
   let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,freeUntil,bonusUntil,accessUntil,streak,claimedToday}
-  let view = 'home';      // 'home' | 'tools'
+  let view = 'home';      // 'home' | 'tools' | 'detail' | 'profile' | 'admin'
+  let intro = store.get('nt_intro', 0) ? '' : 'splash', guide = false, obIdx = 0, range = 7;
   let adminUserListCache = []; // hasil ntAdminListUsers() disimpan di sini biar search di modal gak fetch ulang
 
   function closeMenu() { menu.hidden = true; menuBtn.setAttribute('aria-expanded', 'false'); }
   function toggleMenu(e) { if (e) e.stopPropagation(); menu.hidden = !menu.hidden; menuBtn.setAttribute('aria-expanded', String(!menu.hidden)); }
   function showScreen(name) {
     for (const key in screens) screens[key].hidden = key !== name;
-    const chromeOn = name === 'home' || name === 'tools';
+    const chromeOn = ['home', 'tools', 'detail', 'profile', 'admin'].includes(name);
+    document.body.classList.toggle('no-top', name === 'splash' || name === 'onboard');
     menuWrap.hidden = !chromeOn;
     bottomNav.hidden = !chromeOn;
-    navHome.classList.toggle('active', name === 'home');
-    navTools.classList.toggle('active', name === 'tools');
+    navHome.classList.toggle('active', name === 'home' || name === 'admin');
+    navTools.classList.toggle('active', name === 'tools' || name === 'detail');
+    navProfile.classList.toggle('active', name === 'profile');
     document.body.classList.toggle('is-dark', name === 'home');
     if (themeColorMeta) themeColorMeta.setAttribute('content', name === 'home' ? '#0a0a0a' : '#E7E5E1');
     closeMenu();
@@ -771,9 +931,10 @@ a.gate-btn{text-decoration:none}
       $('stMembers').textContent = s.members;
       $('stHours').textContent = s.hours;
       $('stToday').textContent = s.today;
+      $('dMembers').textContent = s.members; $('dHours').textContent = s.hours; $('dToday').textContent = s.today;
     }).catch(err => {
       console.error('[Node Tools] Statistik admin gagal:', err);
-      ['stMembers', 'stHours', 'stToday'].forEach(id => { $(id).textContent = '–'; });
+      ['stMembers', 'stHours', 'stToday', 'dMembers', 'dHours', 'dToday'].forEach(id => { $(id).textContent = '–'; });
     });
   }
 
@@ -827,6 +988,8 @@ a.gate-btn{text-decoration:none}
     $('claimBtn').hidden = ad || currentAuth.claimedToday;
     $('addBtn').hidden = !ad;
     $('menuAdd').hidden = !ad;
+    $('menuDash').hidden = !ad;
+    $('dashBtn').hidden = !ad;
     $('menuMail').textContent = currentAuth.email;
     $('remainChip').hidden = ad;
     if (!ad) $('memberStreak').textContent = currentAuth.streak;
@@ -838,17 +1001,122 @@ a.gate-btn{text-decoration:none}
     const href = 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(msg);
     const a = $('waBtnHome');
     if (a) a.href = href;
+    const h = $('pfHelp');
+    if (h) h.href = href;
   }
 
   function render() {
+    if (intro === 'splash' && !currentAuth) return showScreen('splash');
+    if (intro === 'onboard') { paintOb(); return showScreen('onboard'); }
     if (!authResolved) return showScreen('checking');
     if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
+    if (view === 'admin' && !currentAuth.isAdmin) view = 'home';
+    if (view === 'detail' && !cur) view = 'tools';
     updateWaLinks();
     paintHome();
+    if (view === 'detail') paintDetail(); else if (view === 'profile') paintProfile(); else if (view === 'admin') drawChart();
     showScreen(view);
     startCountdown();
     load();
     loadStats(false);
+  }
+
+  // ---------- Detail tool, favorit, riwayat ----------
+  function openDetail(t) { cur = t; go('detail'); }
+  function paintFav(t) {
+    const on = favs.includes(t.name), f = t.node.querySelector('.fav');
+    f.classList.toggle('on', on);
+    f.setAttribute('aria-pressed', String(on));
+    if (cur === t) { $('dtFav').classList.toggle('on', on); $('dtFav').setAttribute('aria-pressed', String(on)); }
+  }
+  function setFav(t) {
+    favs = favs.includes(t.name) ? favs.filter(n => n !== t.name) : [...favs, t.name];
+    store.set('nt_fav', favs);
+    paintFav(t);
+    if (mode === 'fav') filter();
+  }
+  function addHist(name) {
+    store.set('nt_hist', [{ n: name, t: Date.now() }, ...store.get('nt_hist', []).filter(h => h.n !== name)].slice(0, 8));
+  }
+  function paintDetail() {
+    const t = cur, th = mkThumb(t);
+    th.id = 'dtThumb';
+    $('dtThumb').replaceWith(th);
+    $('dtName').textContent = t.name;
+    $('dtDesc').textContent = t.desc || 'Tool praktis buat kerjaan editing kamu.';
+    const tg = $('dtTag');
+    tg.hidden = !t.label;
+    tg.textContent = t.label;
+    tg.className = 'tag' + (t.label === 'Baru' ? ' new' : '');
+    $('dtGo').href = t.href;
+    paintFav(t);
+    const st = t.steps.length ? t.steps : ['Buka tool lewat tombol di bawah.', 'Masukkan atau tempel kontenmu.', 'Salin atau unduh hasilnya.'];
+    $('dtSteps').replaceChildren(...st.map(x => el('li', null, x)));
+  }
+
+  // ---------- Profil ----------
+  function paintProfile() {
+    const a = currentAuth, ad = a.isAdmin;
+    $('pfMail').textContent = a.email;
+    $('pfRole').textContent = ad ? 'Admin' : 'Member';
+    $('pfRole').className = 'rolechip ' + (ad ? 'admin' : 'member');
+    $('pfStreak').hidden = ad;
+    $('pfDays').textContent = a.streak;
+    const nx = a.streak + 1, h = window.ntHoursForStreak ? window.ntHoursForStreak(nx) : 1;
+    $('pfNext').textContent = (a.claimedToday ? 'Klaim besok' : 'Klaim hari ini') + ' dapat ' + h + ' jam (hari ke-' + nx + ').';
+    const box = $('pfHist'), hist = store.get('nt_hist', []);
+    box.replaceChildren();
+    if (!hist.length) return box.append(el('p', 'state', 'Belum ada riwayat. Buka satu tool dulu.'));
+    hist.forEach(x => {
+      const r = el('button', 'row', x.n);
+      r.type = 'button';
+      r.append(el('small', null, new Date(x.t).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' })));
+      r.addEventListener('click', () => { const t = tools.find(k => k.name === x.n); if (t) openDetail(t); });
+      box.append(r);
+    });
+  }
+
+  // ---------- Dashboard admin: klaim terakhir per hari (dari lastClaimDay tiap member) ----------
+  function drawChart() {
+    const box = $('chart');
+    const draw = () => {
+      const today = Math.floor(Date.now() / 864e5), n = range, c = new Array(n).fill(0);
+      adminUserListCache.forEach(u => { const k = today - u.lastClaimDay; if (k >= 0 && k < n) c[n - 1 - k]++; });
+      const max = Math.max(1, ...c);
+      box.replaceChildren(...c.map((v, i) => {
+        const bar = el('i');
+        bar.style.height = (v / max * 100) + '%';
+        bar.title = new Date((today - (n - 1 - i)) * 864e5).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' }) + ': ' + v;
+        return bar;
+      }));
+      $('chartCap').textContent = c.reduce((x, y) => x + y, 0) + ' member klaim dalam ' + n + ' hari terakhir. Yang dihitung klaim terakhir tiap member.';
+    };
+    if (adminUserListCache.length) return draw();
+    $('chartCap').textContent = 'Memuat...';
+    if (window.ntAdminListUsers) window.ntAdminListUsers().then(l => { adminUserListCache = l; draw(); }).catch(() => { $('chartCap').textContent = 'Gagal memuat grafik.'; });
+  }
+
+  // ---------- Intro: splash + onboarding (sekali per perangkat, bisa dilewati) ----------
+  const SLIDES = [
+    ['i-tools', '--yellow', 'Semua tools editor, satu tempat', 'Teks, gambar, JSON, dan kode. Buka lewat browser, tanpa pasang apa-apa.'],
+    ['i-flame', '--blue', 'Klaim jam gratis tiap hari', 'Tekan Mulai Timer sekali sehari. Makin panjang streak, makin banyak jam.'],
+    ['i-plus', '--green', 'Butuh lebih? Minta ke admin', 'Ajukan tugas atau bayar lewat WhatsApp untuk tambahan waktu.']
+  ];
+  function paintOb() {
+    const sl = SLIDES[obIdx];
+    $('obArt').style.setProperty('--c', 'var(' + sl[1] + ')');
+    $('obUse').setAttribute('href', '#' + sl[0]);
+    $('obTitle').textContent = sl[2];
+    $('obText').textContent = sl[3];
+    $('obDots').replaceChildren(...SLIDES.map((_, i) => el('i', i === obIdx ? 'on' : null)));
+    $('obNext').textContent = obIdx === SLIDES.length - 1 ? 'Mulai' : 'Lanjut';
+  }
+  function endIntro() { intro = ''; guide = false; obIdx = 0; store.set('nt_intro', 1); render(); }
+  function afterSplash() {
+    if (intro !== 'splash') return;
+    intro = currentAuth ? '' : 'onboard';
+    if (!intro) store.set('nt_intro', 1);
+    render();
   }
 
   const signOutNow = () => window.ntFirebaseSignOut && window.ntFirebaseSignOut();
@@ -878,13 +1146,33 @@ a.gate-btn{text-decoration:none}
   $('menuAdd').addEventListener('click', openAdmin);
   $('adminClose').addEventListener('click', () => adminPanel.close());
   menuBtn.addEventListener('click', toggleMenu);
-  navProfile.addEventListener('click', toggleMenu);
+  navProfile.addEventListener('click', () => go('profile'));
   navHome.addEventListener('click', () => go('home'));
   navTools.addEventListener('click', () => go('tools'));
   $('menuClose').addEventListener('click', closeMenu);
   $('adminUserSearch').addEventListener('input', renderAdminUserList);
   document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
+  $('menuProfile').addEventListener('click', () => go('profile'));
+  $('menuDash').addEventListener('click', () => go('admin'));
+  $('dashBtn').addEventListener('click', () => go('admin'));
+  $('adBack').addEventListener('click', () => go('home'));
+  $('dAdd').addEventListener('click', openAdmin);
+  $('dtBack').addEventListener('click', () => go('tools'));
+  $('dtFav').addEventListener('click', () => cur && setFav(cur));
+  $('dtGo').addEventListener('click', () => cur && addHist(cur.name));
+  $('pfOut').addEventListener('click', signOutNow);
+  $('pfClear').addEventListener('click', () => { store.set('nt_hist', []); paintProfile(); });
+  $('pfGuide').addEventListener('click', () => { guide = true; obIdx = 0; intro = 'onboard'; render(); });
+  $('obNext').addEventListener('click', () => { if (obIdx < SLIDES.length - 1) { obIdx++; paintOb(); } else endIntro(); });
+  $('obSkip').addEventListener('click', endIntro);
+  $('screen-splash').addEventListener('click', afterSplash);
+  setTimeout(afterSplash, 1400);
+  document.querySelectorAll('.fchip[data-r]').forEach(b => b.addEventListener('click', () => {
+    range = +b.dataset.r;
+    document.querySelectorAll('.fchip[data-r]').forEach(x => x.classList.toggle('on', x === b));
+    drawChart();
+  }));
 
   adminForm.addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -916,6 +1204,7 @@ a.gate-btn{text-decoration:none}
 
   window.ntOnAuth = (auth) => {
     if (!auth) view = 'home';
+    if (auth && intro && !guide) { intro = ''; store.set('nt_intro', 1); }
     currentAuth = auth;
     authResolved = true;
     render();
