@@ -3,9 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Node Tools — Small Tools. Big Work.</title>
-<meta name="description" content="Small Tools. Big Work.">
-<meta name="theme-color" content="#E7E5E1">
+<title>Node Tools — Tiny tools. Real work.</title>
+<meta name="description" content="Tiny tools. Real work.">
+<meta name="theme-color" content="#E7E5E1" id="themeColorMeta">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..900&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -228,9 +228,9 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 /* Header */
 .top{position:relative;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding-block:clamp(1rem,4vw,1.5rem)}
 .brand{display:flex;align-items:center;gap:.75rem}
-.brand svg{width:clamp(40px,11vw,48px);height:auto;flex:none}
+.logomark{display:grid;place-items:center;flex:none;width:clamp(40px,11vw,46px);height:clamp(40px,11vw,46px);background:var(--yellow);border:3px solid var(--ink);border-radius:24%;font:900 clamp(1.1rem,5vw,1.35rem) var(--sans);color:var(--ink);line-height:1}
 .brand b{display:block;font:900 clamp(1.25rem,5.4vw,1.5rem)/.92 var(--sans);font-stretch:85%;letter-spacing:-.02em}
-.brand small{display:block;margin-top:.35rem;font-size:.64rem}
+.brand small{display:block;margin-top:.35rem;font-size:.64rem;color:#6b6a68}
 .brand small i{font-style:normal;color:var(--blue)}
 .ic{width:1.35rem;height:1.35rem;flex:none;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:square;stroke-linejoin:miter}
 .iconbtn{display:grid;place-items:center;width:46px;height:46px;padding:0;background:var(--card);color:var(--ink);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);cursor:pointer;transition:transform .1s,box-shadow .1s}
@@ -240,45 +240,45 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .modal-x .ic{width:1rem;height:1rem}
 
 /* Sudut terpotong: aksen brutalist bersama beberapa komponen utama */
-.rolechip,.panel,.act,.iconbtn,.gate-icon,.stat{--c:12px;--s:6px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
-.rolechip::after,.panel::after,.act::after,.iconbtn::after,.gate-icon::after,.stat::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
+.rolechip,.act,.iconbtn,.gate-icon,.stat{--c:12px;--s:6px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
+.rolechip::after,.act::after,.iconbtn::after,.gate-icon::after,.stat::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
 .rolechip{--c:8px;--s:4px}
 .stat{--c:12px;--s:6px}
-.panel{--c:14px;--s:8px}
 .iconbtn{--s:4px;clip-path:polygon(var(--c) 0,100% 0,100% var(--s),calc(100% + var(--s)) var(--s),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)),0 var(--c))}
 .iconbtn::after{right:auto;left:-3px;background:linear-gradient(to bottom right,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
 .act:focus-visible,.iconbtn:focus-visible{outline-offset:-8px}
 
 /* Menu drawer (slide dari kanan, isi profil + navigasi) */
-.menu{position:fixed;top:0;right:0;bottom:0;z-index:50;width:min(300px,84vw);display:flex;flex-direction:column;background:var(--card);border-left:3px solid var(--ink);box-shadow:-10px 0 0 rgba(0,0,0,.14)}
-.menu-head{position:relative;padding:1.4rem 3rem 1.2rem 1.2rem;background:var(--yellow);border-bottom:3px solid var(--ink)}
-.menu-head .modal-x{position:absolute;top:.8rem;right:.8rem}
-.menu-avatar{display:grid;place-items:center;width:2.8rem;height:2.8rem;margin-bottom:.7rem;background:#fff;border:3px solid var(--ink)}
+.menu{position:fixed;top:0;right:0;bottom:0;z-index:50;width:min(300px,84vw);display:flex;flex-direction:column;background:var(--ink);color:#fff;border-left:3px solid var(--ink);box-shadow:-10px 0 0 rgba(0,0,0,.14)}
+.menu-head{position:relative;padding:1.4rem 3rem 1.2rem 1.2rem;background:var(--ink);border-bottom:2px solid #2a2a2b}
+.menu-head .modal-x{position:absolute;top:.8rem;right:.8rem;background:#1c1c1d;color:#fff;border-color:#3a3a3b}
+.menu-avatar{display:grid;place-items:center;width:2.8rem;height:2.8rem;margin-bottom:.7rem;background:var(--yellow);color:var(--ink);border:3px solid var(--ink)}
 .menu-avatar .ic{width:1.4rem;height:1.4rem}
-.menu-mail{margin:0 0 .6rem;font-size:.72rem;overflow-wrap:anywhere}
+.menu-mail{margin:0 0 .6rem;font-size:.72rem;overflow-wrap:anywhere;color:#c9c8c5}
 .menu-list{flex:1;overflow-y:auto;margin:0;padding:.4rem 0}
-.menu-list button{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;background:none;border:0;border-bottom:2px solid var(--line);color:var(--ink);font:800 .9rem var(--sans);text-align:left;cursor:pointer}
-.menu-list button:hover{background:var(--yellow)}
-.menu-foot{padding:.9rem 1.2rem;border-top:3px solid var(--ink);font:800 .76rem var(--sans)}
-.menu-foot span{display:block;margin-top:.15rem;font:500 .66rem var(--mono);color:#6b6a68}
+.menu-list button{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;background:none;border:0;border-bottom:1px solid #232324;color:#fff;font:800 .9rem var(--sans);text-align:left;cursor:pointer}
+.menu-list button:hover{background:#1c1c1d}
+.menu-foot{padding:.9rem 1.2rem;border-top:2px solid #2a2a2b;font:800 .76rem var(--sans)}
+.menu-foot span{display:block;margin-top:.15rem;font:500 .66rem var(--mono);color:#8a8985}
 
-/* Bottom nav (Beranda / Tools / Profil) */
-.bottomnav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--card);border-top:3px solid var(--ink)}
-.bottomnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:.25rem;padding:.55rem 0 calc(.5rem + env(safe-area-inset-bottom,0px));background:none;border:0;border-right:2px solid var(--line);color:#6b6a68;font:800 .64rem var(--sans);cursor:pointer}
-.bottomnav button:last-child{border-right:0}
-.bottomnav button.active{color:var(--ink);background:var(--yellow)}
-.bottomnav .ic{width:1.3rem;height:1.3rem}
+/* Bottom nav (Beranda / Tools / Profil) -- gelap tetap, badge kuning cuma di ikon aktif */
+.bottomnav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--ink);border-top:3px solid var(--ink);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottomnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.6rem 0 .5rem;background:none;border:0;color:#8a8985;font:800 .64rem var(--sans);cursor:pointer;transition:color .15s}
+.bottomnav .ic{width:1.3rem;height:1.3rem;box-sizing:border-box;transition:background .15s,padding .15s,width .15s,height .15s}
+.bottomnav button.active{color:#fff}
+.bottomnav button.active .ic{width:1.9rem;height:1.9rem;padding:.35rem;background:var(--yellow);color:var(--ink);border-radius:30%}
 
 /* Role chip (Admin/Member) */
 .rolechip{display:inline-block;margin:0 0 .7rem;padding:.28rem .75rem;font:800 .72rem var(--sans);box-shadow:4px 4px 0 var(--ink)}
 .rolechip.admin{background:var(--ink);color:#fff}
 .rolechip.member{background:var(--blue);color:#fff}
 
-/* Beranda */
-.hero{position:relative;padding-top:1rem}
-.hero-cube{position:absolute;right:-.6rem;top:-.4rem;width:clamp(58px,17vw,84px);height:auto}
-.badge{margin:0 0 .35rem;font:900 clamp(1.7rem,8vw,2.4rem)/1.04 var(--sans);font-stretch:85%;letter-spacing:-.02em}
-.lead{max-width:34ch;margin:0 0 1.5rem;font-size:.82rem;color:#43413e}
+/* Beranda: tema gelap cuma di layar ini (post-login), biar first impression lebih "wah" */
+body.is-dark{background-color:var(--ink);color:#fff}
+body.is-dark .brand small{color:#8a8985}
+body.is-dark .stat{color:var(--ink)}
+body.is-dark .stat,body.is-dark .act{box-shadow:6px 6px 0 #2c2c2d}
+.greet{margin:.5rem 0 1.3rem;font:900 clamp(1.6rem,7.5vw,2rem)/1.1 var(--sans);letter-spacing:-.02em}
 
 /* Stat card admin */
 .stats{display:flex;flex-direction:column;gap:.9rem;margin:0 0 1.6rem}
@@ -290,17 +290,22 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .stat-label{flex:1;font-size:.78rem}
 .stat b{font:900 1.6rem/1 var(--sans);font-variant-numeric:tabular-nums}
 
-/* Panel member (timer gratis + bonus, kepisah sesuai permintaan) */
-.panel{margin:0 0 1.6rem;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);padding:1.1rem}
-.panel-rows{display:flex;flex-direction:column;gap:.9rem}
-.prow{display:flex;align-items:center;gap:.8rem}
-.prow span{flex:1;font-size:.78rem}
-.prow b{font:900 1.35rem/1 var(--sans);font-variant-numeric:tabular-nums}
-.panel-sub{display:flex;flex-wrap:wrap;gap:.5rem 1.1rem;margin-top:1rem;padding-top:1rem;border-top:1.5px solid var(--line);font-size:.7rem}
-.panel-sub span{display:inline-flex;align-items:center;gap:.35rem}
-.panel-sub .ic{width:1rem;height:1rem}
-.note{display:flex;align-items:center;gap:.7rem;margin:.9rem 0 0;padding-top:.9rem;border-top:1.5px solid var(--line);font-size:.64rem}
-.wa-line{margin:.8rem 0 0;font-size:.74rem}
+/* Kartu timer member: gratis (kuning, CTA klaim nempel di kartu) + tambahan admin (gelap) -- sengaja dipisah biar gak ketuker */
+.timer-card{margin:0 0 1rem;padding:1.2rem 1.3rem;background:var(--yellow);border-radius:20px;color:var(--ink)}
+.timer-card-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.5rem;font:800 .82rem var(--sans)}
+.timer-streak{display:inline-flex;align-items:center;gap:.3rem}
+.timer-streak .ic{width:1rem;height:1rem}
+.timer-big{display:block;font:900 clamp(2rem,11vw,2.5rem)/1 var(--sans);font-variant-numeric:tabular-nums}
+.timer-hint{margin:.3rem 0 0;font-size:.74rem;opacity:.75}
+.timer-claim{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;margin-top:.9rem;padding:.85rem 1rem;background:var(--ink);color:#fff;border:0;border-radius:12px;font:800 .92rem var(--sans);cursor:pointer;transition:transform .1s}
+.timer-claim .ic{width:1.2rem;height:1.2rem}
+.timer-claim:active{transform:scale(.98)}
+.timer-bonus{display:flex;align-items:center;gap:.8rem;margin:0 0 .7rem;padding:1rem 1.2rem;background:#1c1c1d;border-radius:16px;color:#fff}
+.timer-bonus .ic{flex:none;width:1.3rem;height:1.3rem;color:#9a9995}
+.timer-bonus-label{flex:1;font-size:.78rem;color:#c9c8c5}
+.timer-bonus b{font:900 1.25rem/1 var(--sans);font-variant-numeric:tabular-nums}
+.wa-line{margin:0 0 1.6rem;font-size:.72rem}
+.wa-line .link-btn{color:#fff}
 
 .act{display:flex;align-items:center;gap:1rem;width:100%;margin:0 0 1.1rem;padding:1rem 1.1rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font:800 1.02rem var(--sans);text-align:left;cursor:pointer;transition:transform .1s,box-shadow .1s}
 .act.y{background:var(--yellow)}
@@ -308,12 +313,6 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .act .ic{width:1.4rem;height:1.4rem}
 .act:hover{transform:translate(-2px,-2px);box-shadow:8px 8px 0 var(--ink)}
 .act:active{transform:translate(4px,4px);box-shadow:2px 2px 0 var(--ink)}
-
-/* Footer dekoratif */
-.foot{position:relative;flex:none;height:clamp(64px,15vw,100px);margin-top:1rem;overflow:hidden}
-.foot svg{position:absolute;inset:0;width:100%;height:100%}
-.foot p{position:absolute;left:clamp(1.1rem,5vw,2rem);top:28%;margin:0;color:#fff;font-size:.6rem}
-.foot p::after{content:"";display:block;width:24px;height:2px;margin-top:.5rem;background:#fff}
 
 /* Semua tools: header + search + daftar (list, bukan grid kartu) */
 .bar{display:flex;align-items:center;gap:.9rem;margin:0 0 1.3rem}
@@ -354,8 +353,6 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .gate-wrap{display:flex;justify-content:center;padding:clamp(1.4rem,6vw,3rem) 0}
 .gate{width:100%;max-width:380px;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);overflow:hidden}
 .gate-top{display:grid;place-items:center;padding:1.8rem 1rem;border-bottom:3px solid var(--ink)}
-#screen-login .gate-top,#screen-start .gate-top{background:var(--yellow)}
-#screen-noaccess .gate-top{background:var(--blue)}
 #screen-error .gate-top{background:var(--red)}
 .gate-icon{display:grid;place-items:center;width:4.2rem;height:4.2rem;background:#fff}
 .gate-icon .ic{width:2rem;height:2rem}
@@ -364,8 +361,6 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .gate-body p{margin:0 0 1.3rem;font-size:.86rem}
 .gate-body.center{text-align:center}
 .gate-btn{display:flex;align-items:center;justify-content:center;gap:.6rem;width:100%;padding:.85rem 1rem;background:var(--yellow);color:var(--ink);border:3px solid var(--ink);box-shadow:5px 5px 0 var(--ink);font:800 .94rem var(--sans);cursor:pointer;text-decoration:none;transition:transform .1s,box-shadow .1s}
-.gate-btn.blue{background:var(--blue);color:#fff}
-.gate-btn.outline{background:var(--card);color:var(--blue);border-color:var(--blue)}
 .gate-btn+.gate-btn{margin-top:.9rem}
 .gate-btn:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
 .gate-btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
@@ -378,13 +373,13 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .link-btn{display:inline-flex;align-items:center;gap:.35rem;background:none;border:0;padding:0;color:var(--ink);font:800 .88rem var(--sans);text-decoration:underline;cursor:pointer}
 .link-btn .ic{width:.85rem;height:.85rem}
 
-/* Hero login (logo besar, bukan ikon gerbang generik) */
-.login-hero{display:flex;flex-direction:column;align-items:center;padding:2.2rem 1rem 1.6rem;text-align:center}
-.login-cube{width:60px;height:auto;margin-bottom:1rem}
-.login-word{display:block;font:900 1.6rem/1 var(--sans);letter-spacing:-.02em}
-.login-tag{display:block;margin-top:.5rem;font-size:.74rem;color:#6b6a68}
-.login-tag i{font-style:normal;color:var(--blue)}
-.gate-caption{margin:1rem 0 0;font-size:.7rem;color:#6b6a68}
+/* Login: langsung di halaman (bukan kartu ber-border kayak gate lain), fokus ke 1 CTA */
+.login-wrap{display:flex;flex-direction:column;align-items:center;text-align:center;padding:clamp(2.6rem,15vw,4.5rem) 0 1.5rem}
+.login-logo{width:5.4rem;height:5.4rem;font-size:2.5rem;border-radius:22%;margin-bottom:1.4rem}
+.login-title{margin:0 0 .4rem;font:900 1.9rem/1 var(--sans);letter-spacing:-.02em}
+.login-sub{margin:0 0 2.2rem;font-size:.86rem;color:#6b6a68}
+.login-wrap .gate-btn{max-width:340px}
+.gate-caption{margin:1.1rem 0 0;font-size:.7rem;color:#6b6a68}
 
 /* Dialog admin */
 dialog#adminPanel{max-width:380px;width:88vw;padding:0;overflow:hidden;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);font-family:var(--mono);color:var(--ink)}
@@ -431,8 +426,8 @@ a.gate-btn{text-decoration:none}
 
 <div class="wrap top">
   <div class="brand">
-    <svg viewBox="0 0 60 74" aria-hidden="true" fill="#0a0a0a"><path d="M30 4l28 15-28 15L2 19z"/><path d="M2 24l26 14v34L2 58z"/><path d="M58 24L32 38v34l26-14z"/><path d="M8 1h9v10H8z"/></svg>
-    <span><b>Node<br>Tools</b><small>Small Tools. <i>Big Work.</i></small></span>
+    <span class="logomark">N</span>
+    <span><b>Node<br>Tools</b><small>Tiny tools. <i>Real work.</i></small></span>
   </div>
   <div id="menuWrap" class="menuwrap" hidden>
     <button id="menuBtn" class="iconbtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="menu"><svg class="ic"><use href="#i-menu"/></svg></button>
@@ -449,7 +444,7 @@ a.gate-btn{text-decoration:none}
         <button id="menuAdd" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg>Tambah Akses</button>
         <button id="menuOut" type="button"><svg class="ic"><use href="#i-arrow"/></svg>Keluar</button>
       </nav>
-      <div class="menu-foot">Node Tools<span>Small Tools. Big Work.</span></div>
+      <div class="menu-foot">Node Tools<span>Tiny tools. Real work.</span></div>
     </div>
   </div>
 </div>
@@ -466,46 +461,15 @@ a.gate-btn{text-decoration:none}
     </div>
   </section>
 
-  <section id="screen-login" class="gate-wrap" hidden>
-    <div class="gate">
-      <div class="login-hero">
-        <svg class="login-cube" viewBox="0 0 60 74" aria-hidden="true" fill="#0a0a0a"><path d="M30 4l28 15-28 15L2 19z"/><path d="M2 24l26 14v34L2 58z"/><path d="M58 24L32 38v34l26-14z"/><path d="M8 1h9v10H8z"/></svg>
-        <b class="login-word">Node Tools</b>
-        <span class="login-tag">Small Tools. <i>Big Work.</i></span>
-      </div>
-      <div class="gate-body center">
-        <button id="loginBtn" class="gate-btn" type="button">
-          <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
-          Masuk dengan Google
-        </button>
-        <p class="gate-caption">Akses cepat, aman, dan gratis.</p>
-      </div>
-    </div>
-  </section>
-
-  <section id="screen-start" class="gate-wrap" hidden>
-    <div class="gate">
-      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-clock"/></svg></span></div>
-      <div class="gate-body">
-        <h2>Mulai Timer Harian</h2>
-        <p>Streak beruntun kamu: <b id="startStreak">0</b> hari. Mulai timer sekarang buat dapat <b id="startHours">1</b> jam akses hari ini.</p>
-        <button id="startTimerBtn" class="gate-btn" type="button">Mulai Timer Harian</button>
-        <a id="waBtnStart" class="gate-btn outline" target="_blank" rel="noopener" href="#">Minta Tambahan (WA)</a>
-        <p id="startMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
-      </div>
-    </div>
-  </section>
-
-  <section id="screen-noaccess" class="gate-wrap" hidden>
-    <div class="gate">
-      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-chat"/></svg></span></div>
-      <div class="gate-body">
-        <h2>Akses harian abis</h2>
-        <p>Jatah jam hari ini udah kepake semua. Balik lagi besok buat lanjutin streak, atau minta tambahan waktu ke admin.</p>
-        <a id="waBtnNoAccess" class="gate-btn blue" target="_blank" rel="noopener" href="#">Chat WhatsApp</a>
-        <div class="gate-alt"><button id="logoutBtnNoAccess" class="link-btn" type="button">Keluar</button></div>
-      </div>
-    </div>
+  <section id="screen-login" class="login-wrap" hidden>
+    <span class="logomark login-logo">N</span>
+    <h1 class="login-title">Node Tools</h1>
+    <p class="login-sub">Masuk untuk melanjutkan</p>
+    <button id="loginBtn" class="gate-btn" type="button">
+      <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#4285F4" d="M45.12 24.5c0-1.56-.14-3.06-.4-4.5H24v8.51h11.84c-.51 2.75-2.06 5.08-4.39 6.64v5.52h7.11c4.16-3.83 6.56-9.47 6.56-16.17z"/><path fill="#34A853" d="M24 46c5.94 0 10.92-1.97 14.56-5.33l-7.11-5.52c-1.97 1.32-4.49 2.1-7.45 2.1-5.73 0-10.58-3.87-12.31-9.07H4.34v5.7C7.96 41.07 15.4 46 24 46z"/><path fill="#FBBC05" d="M11.69 28.18C11.25 26.86 11 25.45 11 24s.25-2.86.69-4.18v-5.7H4.34C2.85 17.09 2 20.45 2 24s.85 6.91 2.34 9.88l7.35-5.7z"/><path fill="#EA4335" d="M24 10.75c3.23 0 6.13 1.11 8.41 3.29l6.31-6.31C34.91 4.18 29.93 2 24 2 15.4 2 7.96 6.93 4.34 14.12l7.35 5.7c1.73-5.2 6.58-9.07 12.31-9.07z"/></svg>
+      Masuk dengan Google
+    </button>
+    <p class="gate-caption">Akses cepat, aman, dan gratis.</p>
   </section>
 
   <section id="screen-error" class="gate-wrap" hidden>
@@ -521,12 +485,8 @@ a.gate-btn{text-decoration:none}
   </section>
 
   <section id="screen-home" class="home" hidden>
-    <div class="hero">
-      <svg class="hero-cube" viewBox="0 0 112 152" aria-hidden="true" stroke="#0a0a0a" stroke-width="5" stroke-linejoin="round" stroke-linecap="round"><path d="M40 3l7 16M8 22l16 8" fill="none"/><path d="M60 14l46 26-46 26-46-26z" fill="#1463F3"/><path d="M14 40l46 26v52L14 92z" fill="#1463F3"/><path d="M25 56l25 14v25L25 81z" fill="#4A8DFF" stroke="none"/><path d="M106 40L60 66v52l46-26z" fill="#0a0a0a"/><path d="M66 126l40-22v26l-40 22z" fill="#FFD21F"/></svg>
-      <span id="heroRole" class="rolechip member">Member</span>
-      <h1 id="badge" class="badge y">Halo, Admin!</h1>
-      <p id="homeDesc" class="lead"></p>
-    </div>
+    <span id="heroRole" class="rolechip member">Member</span>
+    <h1 id="greet" class="greet">Halo, Member!</h1>
 
     <section id="panelAdmin" class="stats" hidden>
       <div class="stat"><span class="stat-ic y"><svg class="ic"><use href="#i-user"/></svg></span><span class="stat-label">Total Member</span><b id="stMembers">…</b></div>
@@ -534,20 +494,27 @@ a.gate-btn{text-decoration:none}
       <div class="stat"><span class="stat-ic i"><svg class="ic"><use href="#i-cal"/></svg></span><span class="stat-label">Klaim Hari Ini</span><b id="stToday">…</b></div>
     </section>
 
-    <section id="panelMember" class="panel" hidden>
-      <div class="panel-rows">
-        <div class="prow"><svg class="ic"><use href="#i-clock"/></svg><span>Timer Gratis</span><b class="js-remain-free">0:00</b></div>
-        <div class="prow"><svg class="ic"><use href="#i-plus"/></svg><span>Timer Tambahan Admin</span><b class="js-remain-bonus">0:00</b></div>
+    <section id="panelMember" hidden>
+      <div class="timer-card">
+        <div class="timer-card-head">
+          <span>Timer Gratis</span>
+          <span class="timer-streak"><svg class="ic"><use href="#i-flame"/></svg><b id="memberStreak">0</b><span>hari</span></span>
+        </div>
+        <b class="timer-big js-remain-free">0:00</b>
+        <p id="freeHint" class="timer-hint"></p>
+        <button id="claimBtn" class="timer-claim" type="button" hidden>
+          <svg class="ic"><use href="#i-clock"/></svg><span>Mulai Timer Harian</span>
+        </button>
+        <p id="claimMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
       </div>
-      <div class="panel-sub">
-        <span><svg class="ic"><use href="#i-flame"/></svg>Streak <b id="memberStreak">0</b> hari</span>
-        <span><svg class="ic"><use href="#i-cal"/></svg>Akses hari ini: <b id="todayN">1</b></span>
+      <div class="timer-bonus">
+        <svg class="ic"><use href="#i-plus"/></svg>
+        <span class="timer-bonus-label">Timer Tambahan (Admin)</span>
+        <b class="js-remain-bonus">0:00</b>
       </div>
-      <p class="note"><svg class="ic"><use href="#i-info"/></svg>Timer gratis bakal hangus kalau belum abis dipakai hari itu juga. Timer tambahan dari admin gak ikut hangus.</p>
       <p class="wa-line"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA)<svg class="ic"><use href="#i-arrow"/></svg></a></p>
     </section>
 
-    <button id="claimBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-clock"/></svg><span>Mulai Timer Harian</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="addBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses</span><svg class="ic"><use href="#i-arrow"/></svg></button>
     <button id="allBtn" class="act" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Lihat Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
   </section>
@@ -573,14 +540,6 @@ a.gate-btn{text-decoration:none}
   <button id="navTools" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Tools</span></button>
   <button id="navProfile" type="button"><svg class="ic"><use href="#i-user"/></svg><span>Profil</span></button>
 </nav>
-
-<footer class="foot">
-  <svg viewBox="0 0 100 40" preserveAspectRatio="none" aria-hidden="true">
-    <polygon points="0,0 45,0 81,40 0,40" fill="#1463F3"/>
-    <polygon points="56,17 76,17 76,8 88,0 100,0 100,40 82,40" fill="#0a0a0a" stroke="#E7E5E1" stroke-width="3" vector-effect="non-scaling-stroke"/>
-  </svg>
-  <p>Node Tools v1.0</p>
-</footer>
 
 <dialog id="adminPanel">
   <form id="adminForm">
@@ -728,12 +687,12 @@ a.gate-btn{text-decoration:none}
 
   // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
   const $ = id => document.getElementById(id);
-  const screens = { checking: $('screen-checking'), login: $('screen-login'), start: $('screen-start'), noaccess: $('screen-noaccess'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
+  const screens = { checking: $('screen-checking'), login: $('screen-login'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools') };
   const menuWrap = $('menuWrap'), menuBtn = $('menuBtn'), menu = $('menu');
   const bottomNav = $('bottomNav'), navHome = $('navHome'), navTools = $('navTools'), navProfile = $('navProfile');
   const adminPanel = $('adminPanel'), adminForm = $('adminForm'), adminMsg = $('adminMsg');
   const adminEmailInput = $('adminEmail'), adminHoursInput = $('adminHours');
-  const startTimerBtn = $('startTimerBtn'), startMsg = $('startMsg');
+  const themeColorMeta = $('themeColorMeta');
   const WA_NUMBER = '6285648916476';
 
   let countdownTimer = null, authResolved = false, statsLoaded = false;
@@ -750,6 +709,8 @@ a.gate-btn{text-decoration:none}
     bottomNav.hidden = !chromeOn;
     navHome.classList.toggle('active', name === 'home');
     navTools.classList.toggle('active', name === 'tools');
+    document.body.classList.toggle('is-dark', name === 'home');
+    if (themeColorMeta) themeColorMeta.setAttribute('content', name === 'home' ? '#0a0a0a' : '#E7E5E1');
     closeMenu();
   }
   function go(v) { view = v; window.scrollTo(0, 0); render(); }
@@ -772,14 +733,33 @@ a.gate-btn{text-decoration:none}
       const freeRemain = currentAuth.freeUntil - now;
       const bonusRemain = currentAuth.bonusUntil - now;
       const totalRemain = Math.max(freeRemain, bonusRemain);
-      // Admin gak dibatasi timer sama sekali, jadi gak perlu auto-stop pas "habis"
-      if (!currentAuth.isAdmin && totalRemain <= 0) { stopCountdown(); render(); return; }
       totalNodes.forEach(n => { n.textContent = fmt(Math.max(0, totalRemain)); });
       freeNodes.forEach(n => { n.textContent = fmt(Math.max(0, freeRemain)); });
       bonusNodes.forEach(n => { n.textContent = fmt(Math.max(0, bonusRemain)); });
+      if (!currentAuth.isAdmin) {
+        paintFreeHint(freeRemain);
+        // Abis: cukup stop interval-nya di sini. Home udah nampilin state "abis" secara inline,
+        // JANGAN panggil render() lagi di sini -- bisa infinite loop (render->startCountdown->tick->render->...).
+        if (totalRemain <= 0) stopCountdown();
+      }
     };
     tick();
     countdownTimer = setInterval(tick, 1000);
+  }
+
+  // Teks kecil di bawah angka Timer Gratis: ajakan klaim (belum klaim), pengingat hangus (lagi aktif), atau info abis (udah dipake habis).
+  function paintFreeHint(freeRemain) {
+    const hint = $('freeHint');
+    if (!hint || !currentAuth) return;
+    if (!currentAuth.claimedToday) {
+      const nextStreak = currentAuth.streak > 0 ? currentAuth.streak + 1 : 1;
+      const hrs = window.ntHoursForStreak ? window.ntHoursForStreak(nextStreak) : 1;
+      hint.textContent = 'Klaim sekarang, dapet ' + hrs + ' jam (hari ke-' + nextStreak + ').';
+    } else if (freeRemain > 0) {
+      hint.textContent = 'Hangus tengah malam kalau belum abis dipakai.';
+    } else {
+      hint.textContent = 'Abis buat hari ini. Balik lagi besok, atau minta tambahan ke admin.';
+    }
   }
 
   // Statistik panel admin (baca semua akun di Firestore, sekali per sesi + setelah kasih akses)
@@ -835,51 +815,35 @@ a.gate-btn{text-decoration:none}
 
   function paintHome() {
     const ad = currentAuth.isAdmin;
-    const badge = $('badge');
-    badge.textContent = ad ? 'Halo, Admin!' : 'Halo, Member!';
-    badge.className = 'badge ' + (ad ? 'y' : 'b');
     const roleText = ad ? 'Admin' : 'Member';
     const roleClass = 'rolechip ' + (ad ? 'admin' : 'member');
     $('heroRole').textContent = roleText;
     $('heroRole').className = roleClass;
     $('menuRole').textContent = roleText;
     $('menuRole').className = roleClass;
-    $('homeDesc').textContent = ad ? 'Kelola akses dan nikmati semua fitur yang tersedia.' : 'Nikmati akses tools dengan mudah dan cepat.';
+    $('greet').textContent = ad ? 'Halo, Admin!' : 'Halo, Member!';
     $('panelAdmin').hidden = !ad;
     $('panelMember').hidden = ad;
     $('claimBtn').hidden = ad || currentAuth.claimedToday;
     $('addBtn').hidden = !ad;
     $('menuAdd').hidden = !ad;
     $('menuMail').textContent = currentAuth.email;
-    $('todayN').textContent = currentAuth.claimedToday ? 1 : 0;
-    $('memberStreak').textContent = currentAuth.streak;
     $('remainChip').hidden = ad;
+    if (!ad) $('memberStreak').textContent = currentAuth.streak;
   }
 
-  // Isi teks layar "Mulai Timer": streak yang udah jalan + proyeksi jam yang bakal didapat kalau lanjut hari ini.
-  function paintStart() {
-    const nextDay = currentAuth.streak > 0 ? currentAuth.streak + 1 : 1;
-    const hours = window.ntHoursForStreak ? window.ntHoursForStreak(nextDay) : 1;
-    $('startStreak').textContent = currentAuth.streak;
-    $('startHours').textContent = hours;
-  }
-
-  // Isi link WA (noaccess + panel member + layar klaim timer) dengan pesan siap kirim, termasuk email akun yang lagi login.
+  // Isi link WA di kartu Timer Tambahan (home) dengan pesan siap kirim, termasuk email akun yang lagi login.
   function updateWaLinks() {
     const msg = 'Halo Admin Node Tools, saya mau minta tambahan waktu akses.\nEmail: ' + currentAuth.email + '\nSaya bisa bantu tugas atau bayar untuk tambahan waktu.';
     const href = 'https://wa.me/' + WA_NUMBER + '?text=' + encodeURIComponent(msg);
-    [$('waBtnNoAccess'), $('waBtnHome'), $('waBtnStart')].forEach(a => { if (a) a.href = href; });
+    const a = $('waBtnHome');
+    if (a) a.href = href;
   }
 
   function render() {
     if (!authResolved) return showScreen('checking');
     if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
     updateWaLinks();
-    if (!currentAuth.isAdmin && currentAuth.accessUntil <= Date.now()) {
-      stopCountdown();
-      if (!currentAuth.claimedToday) { paintStart(); return showScreen('start'); }
-      return showScreen('noaccess');
-    }
     paintHome();
     showScreen(view);
     startCountdown();
@@ -904,9 +868,7 @@ a.gate-btn{text-decoration:none}
     }
   }
   $('loginBtn').addEventListener('click', () => window.ntFirebaseSignIn && window.ntFirebaseSignIn());
-  startTimerBtn.addEventListener('click', () => claimTimer(startTimerBtn, startMsg));
-  $('claimBtn').addEventListener('click', () => claimTimer($('claimBtn')));
-  $('logoutBtnNoAccess').addEventListener('click', signOutNow);
+  $('claimBtn').addEventListener('click', () => claimTimer($('claimBtn'), $('claimMsg')));
   $('menuOut').addEventListener('click', signOutNow);
   $('allBtn').addEventListener('click', () => go('tools'));
   $('menuTools').addEventListener('click', () => go('tools'));
