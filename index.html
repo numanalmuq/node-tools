@@ -1,12 +1,12 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-<meta name="color-scheme" content="light">
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Node Tools — Tiny tools. Real work.</title>
 <meta name="description" content="Tiny tools. Real work.">
 <meta name="theme-color" content="#E7E5E1" id="themeColorMeta">
+<meta name="color-scheme" content="light">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@75..125,500..900&family=JetBrains+Mono:wght@500;700&display=swap">
@@ -52,7 +52,7 @@
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-    collection, query, where, getDocs, updateDoc
+    collection, query, where, getDocs, updateDoc, addDoc
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
   // GANTI dengan config Firebase project kamu sendiri (lihat komentar di atas). Harus sama persis dengan guard.js.
@@ -149,6 +149,38 @@
     return newUntil;
   };
 
+  // Bagi waktu ke SEMUA member: admin bikin 1 dokumen di koleksi "gifts" (jam, deskripsi, masa klaim 1-30 hari).
+  // Member klaim sendiri dari beranda -> bonusUntil-nya nambah. Telat klaim (lewat expired) = hangus. Butuh rules gifts di firestore.rules.
+  window.ntAdminGift = async (hours, desc, days) => {
+    const user = auth.currentUser, h = Number(hours), d = Number(days);
+    if (!user || !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) throw new Error('Khusus admin.');
+    if (!Number.isInteger(h) || h < 1 || h > 24) throw new Error('Durasi harus 1-24 jam.');
+    if (!Number.isInteger(d) || d < 1 || d > 30) throw new Error('Kedaluwarsa harus 1-30 hari.');
+    const now = Date.now(), expiresAt = now + d * ONE_DAY;
+    await addDoc(collection(db, 'gifts'), { hours: h, desc: String(desc || '').trim().slice(0, 80), createdAt: now, expiresAt, by: user.email.toLowerCase() });
+    return expiresAt;
+  };
+  // Hadiah yang masih berlaku & belum diklaim akun ini.
+  window.ntListGifts = async () => {
+    const user = auth.currentUser;
+    if (!user) return [];
+    const [gs, us] = await Promise.all([getDocs(query(collection(db, 'gifts'), where('expiresAt', '>', Date.now()))), getDoc(doc(db, 'users', user.uid))]);
+    const claimed = (us.data() || {}).giftClaims || {};
+    return gs.docs.filter(g => !claimed[g.id]).map(g => ({ id: g.id, ...g.data() })).sort((a, b) => a.expiresAt - b.expiresAt);
+  };
+  // Klaim hadiah: nambah bonusUntil (numpuk dari nilai lama) + tandai giftClaims.<id> biar gak bisa klaim 2x.
+  window.ntClaimGift = async (gid) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Kamu belum login.');
+    const ref = doc(db, 'users', user.uid);
+    const [gs, us] = await Promise.all([getDoc(doc(db, 'gifts', gid)), getDoc(ref)]);
+    if (!gs.exists() || gs.data().expiresAt <= Date.now()) throw new Error('Hadiah ini sudah kedaluwarsa.');
+    const u = us.data() || {};
+    if ((u.giftClaims || {})[gid]) throw new Error('Hadiah ini sudah kamu klaim.');
+    const bonusUntil = Math.max(Number(u.bonusUntil || 0), Date.now()) + gs.data().hours * ONE_HOUR;
+    await updateDoc(ref, { bonusUntil, ['giftClaims.' + gid]: true, lastGiftId: gid, updatedAt: serverTimestamp() });
+  };
+
   // Statistik ringkas panel admin: total akun, total sisa jam akses semua akun (gratis + bonus), akun yang mulai timer hari ini.
   window.ntAdminStats = async () => {
     const snaps = await getDocs(collection(db, 'users'));
@@ -221,7 +253,7 @@
 </script>
 
 <style>
-:root{--ink:#0a0a0a;--paper:#E7E5E1;--card:#F4F2EE;--white:#fff;--blue:#1463F3;--yellow:#FFD21F;--red:#FF6B5B;--green:#1FCB6B;--line:#C9C6C0;--sans:"Archivo","Arial Black",ui-sans-serif,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
+:root{color-scheme:light;--ink:#0a0a0a;--paper:#E7E5E1;--card:#F4F2EE;--white:#fff;--blue:#1463F3;--yellow:#FFD21F;--red:#FF6B5B;--green:#1FCB6B;--line:#C9C6C0;--sans:"Archivo","Arial Black",ui-sans-serif,system-ui,sans-serif;--mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 :focus-visible{outline:3px dashed var(--ink);outline-offset:3px}
@@ -456,6 +488,12 @@ a.gate-btn{text-decoration:none}
 .chart i{flex:1;min-height:3px;background:var(--yellow);border:2px solid var(--ink);border-bottom:0}
 .chart-cap{margin:.8rem 0 1.4rem;font-size:.7rem;color:#6b6a68}
 .seg{display:flex;gap:.5rem}
+body.is-detail main{padding-top:1.4rem}
+.gift{display:flex;align-items:center;gap:.8rem;margin:0 0 .7rem;padding:.9rem 1.1rem;background:var(--green);color:var(--ink);border-radius:16px}
+.gift-t{flex:1;min-width:0;font:800 .82rem var(--sans);overflow-wrap:anywhere}
+.gift-t small{display:block;margin-top:.2rem;font:500 .66rem var(--mono);opacity:.8}
+.gift button{flex:none;padding:.55rem .85rem;background:var(--ink);color:#fff;border:0;border-radius:10px;font:800 .78rem var(--sans);cursor:pointer}
+.gift button:disabled{opacity:.55}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -463,21 +501,22 @@ a.gate-btn{text-decoration:none}
 <body>
 
 <svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
-  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
-  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
-  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h15M13 6l6 6-6 6"/></symbol>
-  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 4v16M4 12h16"/></symbol>
-  <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" fill="currentColor"/><path d="M4 21c0-4.5 3.5-7 8-7s8 2.5 8 7z" fill="currentColor"/></symbol>
-  <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10l9-7 9 7"/><path d="M5 9v11h14V9"/><path d="M10 20v-6h4v6"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
-  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
-  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.5 6.5a4 4 0 0 0-5 5l-6 6 3 3 6-6a4 4 0 0 0 5-5l-2.5 2.5-2.5-.5-.5-2.5z"/></symbol>
-  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></symbol>
-  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6.5"/><path d="M15 15l6 6"/></symbol>
-  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M4 4h16v12H9l-5 4z"/></symbol>
-  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 3l10 18H2z"/><path d="M12 9.5v5"/><circle cx="12" cy="17.2" r="1.1" fill="currentColor"/></symbol>
-  <symbol id="i-flame" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2Q18 7 17 13Q17 19 12 21Q7 19 7 13Q6 7 12 2Z"/></symbol>
-  <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3l2.6 5.6 6.1.7-4.5 4.2 1.2 6L12 16.5 6.6 19.5l1.2-6L3.3 9.3l6.1-.7z"/></symbol>
+  <!-- Ikon dari Lucide (https://lucide.dev), lisensi ISC -->
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 5h16"/><path d="M4 12h16"/><path d="M4 19h16"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M12 5v14"/></symbol>
+  <symbol id="i-user" viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-6a2 2 0 0 1 2.582 0l7 6A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/></symbol>
+  <symbol id="i-tools" viewBox="0 0 24 24"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.106-3.105c.32-.322.863-.22.983.218a6 6 0 0 1-8.259 7.057l-7.91 7.91a1 1 0 0 1-2.999-3l7.91-7.91a6 6 0 0 1 7.057-8.259c.438.12.54.662.219.984z"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
+  <symbol id="i-chat" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/></symbol>
+  <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
 </defs></svg>
 
 <div class="wrap top">
@@ -584,6 +623,8 @@ a.gate-btn{text-decoration:none}
         <span class="timer-bonus-label">Timer Tambahan (Admin)</span>
         <b class="js-remain-bonus">0:00</b>
       </div>
+      <div id="giftBox"></div>
+      <p id="giftMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
       <p class="wa-line"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA)<svg class="ic"><use href="#i-arrow"/></svg></a></p>
     </section>
 
@@ -679,14 +720,23 @@ a.gate-btn{text-decoration:none}
       <button type="button" id="adminClose" class="modal-x" aria-label="Tutup"><svg class="ic"><use href="#i-close"/></svg></button>
     </div>
     <div class="admin-body">
-      <label>Email Member
+      <div class="seg" style="margin-bottom:1rem"><button class="fchip on" type="button" data-t="one">Satu Member</button><button class="fchip" type="button" data-t="all">Semua Member</button></div>
+      <label id="lblEmail">Email Member
         <input id="adminEmail" type="email" required placeholder="user@example.com" autocomplete="off">
       </label>
       <label>Durasi (Jam)
         <input id="adminHours" type="number" min="1" max="24" value="1" required>
       </label>
+      <div id="allFields" hidden>
+        <label>Deskripsi
+          <input id="giftDesc" type="text" maxlength="80" placeholder="Admin bagi time" autocomplete="off">
+        </label>
+        <label>Kedaluwarsa (Hari)
+          <input id="giftDays" type="number" min="1" max="30" step="1" value="7">
+        </label>
+      </div>
       <p id="adminMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
-      <button type="submit" class="gate-btn">Kirim Akses</button>
+      <button type="submit" id="adminSubmit" class="gate-btn">Kirim Akses</button>
       <h3 class="admin-sub">Daftar Member</h3>
       <label class="search sm">
         <svg class="ic"><use href="#i-search"/></svg>
@@ -853,7 +903,7 @@ a.gate-btn{text-decoration:none}
   const themeColorMeta = $('themeColorMeta');
   const WA_NUMBER = '6285648916476';
 
-  let countdownTimer = null, authResolved = false, statsLoaded = false;
+  let countdownTimer = null, authResolved = false, statsLoaded = false, giftsAt = 0;
   let currentAuth = null; // null = belum login; object = {uid,email,isAdmin,freeUntil,bonusUntil,accessUntil,streak,claimedToday}
   let view = 'home';      // 'home' | 'tools' | 'detail' | 'profile' | 'admin'
   let intro = store.get('nt_intro', 0) ? '' : 'splash', guide = false, obIdx = 0, range = 7;
@@ -864,7 +914,8 @@ a.gate-btn{text-decoration:none}
   function showScreen(name) {
     for (const key in screens) screens[key].hidden = key !== name;
     const chromeOn = ['home', 'tools', 'detail', 'profile', 'admin'].includes(name);
-    document.body.classList.toggle('no-top', name === 'splash' || name === 'onboard');
+    document.body.classList.toggle('no-top', name === 'splash' || name === 'onboard' || name === 'detail');
+    document.body.classList.toggle('is-detail', name === 'detail');
     menuWrap.hidden = !chromeOn;
     bottomNav.hidden = !chromeOn;
     navHome.classList.toggle('active', name === 'home' || name === 'admin');
@@ -975,6 +1026,28 @@ a.gate-btn{text-decoration:none}
     });
   }
 
+  // Hadiah waktu dari admin (bagi ke semua member): tampil di beranda member selama belum expired & belum diklaim.
+  function loadGifts(force) {
+    if (!currentAuth || currentAuth.isAdmin || !window.ntListGifts) return;
+    if (!force && Date.now() - giftsAt < 30000) return;
+    giftsAt = Date.now();
+    window.ntListGifts().then(list => {
+      $('giftBox').replaceChildren(...list.map(g => {
+        const row = el('div', 'gift'), t = el('div', 'gift-t', '+' + g.hours + ' jam' + (g.desc ? ': ' + g.desc : ''));
+        t.append(el('small', null, 'Klaim sebelum ' + new Date(g.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })));
+        const b = el('button', null, 'Klaim');
+        b.type = 'button';
+        b.addEventListener('click', async () => {
+          b.disabled = true; $('giftMsg').hidden = true;
+          try { await window.ntClaimGift(g.id); loadGifts(true); }
+          catch (err) { $('giftMsg').textContent = (err && err.message) || 'Gagal klaim hadiah.'; $('giftMsg').hidden = false; b.disabled = false; }
+        });
+        row.append(svgUse('i-plus', 'ic'), t, b);
+        return row;
+      }));
+    }).catch(err => console.error('[Node Tools] Hadiah gagal dimuat:', err));
+  }
+
   function paintHome() {
     const ad = currentAuth.isAdmin;
     const roleText = ad ? 'Admin' : 'Member';
@@ -1010,7 +1083,7 @@ a.gate-btn{text-decoration:none}
     if (intro === 'splash' && !currentAuth) return showScreen('splash');
     if (intro === 'onboard') { paintOb(); return showScreen('onboard'); }
     if (!authResolved) return showScreen('checking');
-    if (!currentAuth) { stopCountdown(); statsLoaded = false; return showScreen('login'); }
+    if (!currentAuth) { stopCountdown(); statsLoaded = false; giftsAt = 0; return showScreen('login'); }
     if (view === 'admin' && !currentAuth.isAdmin) view = 'home';
     if (view === 'detail' && !cur) view = 'tools';
     updateWaLinks();
@@ -1020,6 +1093,7 @@ a.gate-btn{text-decoration:none}
     startCountdown();
     load();
     loadStats(false);
+    loadGifts(false);
   }
 
   // ---------- Detail tool, favorit, riwayat ----------
@@ -1121,7 +1195,17 @@ a.gate-btn{text-decoration:none}
   }
 
   const signOutNow = () => window.ntFirebaseSignOut && window.ntFirebaseSignOut();
-  const openAdmin = () => { closeMenu(); adminMsg.hidden = true; adminMsg.classList.remove('ok'); adminForm.reset(); adminPanel.showModal(); loadAdminUserList(); };
+  let adminAll = false; // false = satu member (by email), true = bagi ke semua member
+  function setAdminMode(all) {
+    adminAll = all;
+    document.querySelectorAll('.fchip[data-t]').forEach(b => b.classList.toggle('on', (b.dataset.t === 'all') === all));
+    $('lblEmail').hidden = all; $('allFields').hidden = !all;
+    adminEmailInput.required = !all;
+    $('adminSubmit').textContent = all ? 'Bagikan ke Semua Member' : 'Kirim Akses';
+    adminMsg.hidden = true;
+  }
+  document.querySelectorAll('.fchip[data-t]').forEach(b => b.addEventListener('click', () => setAdminMode(b.dataset.t === 'all')));
+  const openAdmin = () => { closeMenu(); adminMsg.hidden = true; adminMsg.classList.remove('ok'); adminForm.reset(); setAdminMode(false); adminPanel.showModal(); loadAdminUserList(); };
 
   // Dipanggil tombol Mulai Timer (layar gate) & Mulai Timer Harian (beranda, kalau masih ada sisa akses tapi belum klaim hari ini).
   // onSnapshot di script Firebase bakal update currentAuth & render ulang sendiri begitu klaim sukses.
@@ -1181,9 +1265,16 @@ a.gate-btn{text-decoration:none}
     submitBtn.disabled = true;
     adminMsg.hidden = true;
     try {
-      const newUntil = await window.ntAdminGrant(adminEmailInput.value, adminHoursInput.value);
+      let okText;
+      if (adminAll) {
+        const until = await window.ntAdminGift(adminHoursInput.value, $('giftDesc').value, $('giftDays').value);
+        okText = 'Berhasil — ' + adminHoursInput.value + ' jam dibagikan ke semua member. Bisa diklaim sampai ' + new Date(until).toLocaleString('id-ID') + '.';
+      } else {
+        const newUntil = await window.ntAdminGrant(adminEmailInput.value, adminHoursInput.value);
+        okText = 'Berhasil — timer tambahan aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
+      }
       adminMsg.classList.add('ok');
-      adminMsg.textContent = 'Berhasil — timer tambahan aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
+      adminMsg.textContent = okText;
       adminMsg.hidden = false;
       loadStats(true);
       loadAdminUserList();
