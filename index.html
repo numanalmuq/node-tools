@@ -285,35 +285,31 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .act:focus-visible,.iconbtn:focus-visible{outline-offset:-8px}
 
 /* Menu drawer (slide dari kanan, isi profil + navigasi) */
-.menu{position:fixed;top:0;right:0;bottom:0;z-index:50;width:min(300px,84vw);display:flex;flex-direction:column;background:var(--ink);color:#fff;border-left:3px solid var(--ink);box-shadow:-10px 0 0 rgba(0,0,0,.14)}
-.menu-head{position:relative;padding:1.4rem 3rem 1.2rem 1.2rem;background:var(--ink);border-bottom:2px solid #2a2a2b}
-.menu-head .modal-x{position:absolute;top:.8rem;right:.8rem;background:#1c1c1d;color:#fff;border-color:#3a3a3b}
+.menu{position:fixed;top:0;right:0;bottom:0;z-index:50;width:min(300px,84vw);display:flex;flex-direction:column;background:var(--card);color:var(--ink);border-left:3px solid var(--ink);box-shadow:-8px 0 0 rgba(0,0,0,.1)}
+.menu-head{position:relative;padding:1.4rem 3rem 1.2rem 1.2rem;background:var(--card);border-bottom:3px solid var(--ink)}
+.menu-head .modal-x{position:absolute;top:.8rem;right:.8rem}
 .menu-avatar{display:grid;place-items:center;width:2.8rem;height:2.8rem;margin-bottom:.7rem;background:var(--yellow);color:var(--ink);border:3px solid var(--ink)}
 .menu-avatar .ic{width:1.4rem;height:1.4rem}
-.menu-mail{margin:0 0 .6rem;font-size:.72rem;overflow-wrap:anywhere;color:#c9c8c5}
+.menu-mail{margin:0 0 .6rem;font-size:.72rem;overflow-wrap:anywhere;color:#43413e}
 .menu-list{flex:1;overflow-y:auto;margin:0;padding:.4rem 0}
-.menu-list button{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;background:none;border:0;border-bottom:1px solid #232324;color:#fff;font:800 .9rem var(--sans);text-align:left;cursor:pointer}
-.menu-list button:hover{background:#1c1c1d}
-.menu-foot{padding:.9rem 1.2rem;border-top:2px solid #2a2a2b;font:800 .76rem var(--sans)}
-.menu-foot span{display:block;margin-top:.15rem;font:500 .66rem var(--mono);color:#8a8985}
+.menu-list button{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;background:none;border:0;border-bottom:2px solid var(--line);color:var(--ink);font:800 .9rem var(--sans);text-align:left;cursor:pointer}
+.menu-list button:hover{background:var(--paper)}
+.menu-foot{padding:.9rem 1.2rem;border-top:3px solid var(--ink);font:800 .76rem var(--sans)}
+.menu-foot span{display:block;margin-top:.15rem;font:500 .66rem var(--mono);color:#6b6a68}
 
 /* Bottom nav (Beranda / Tools / Profil) -- gelap tetap, badge kuning cuma di ikon aktif */
-.bottomnav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--ink);border-top:3px solid var(--ink);padding-bottom:env(safe-area-inset-bottom,0px)}
-.bottomnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.6rem 0 .5rem;background:none;border:0;color:#8a8985;font:800 .64rem var(--sans);cursor:pointer;transition:color .15s}
+.bottomnav{position:fixed;left:0;right:0;bottom:0;z-index:30;display:flex;background:var(--card);border-top:3px solid var(--ink);padding-bottom:env(safe-area-inset-bottom,0px)}
+.bottomnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:.3rem;padding:.6rem 0 .5rem;background:none;border:0;color:#6b6a68;font:800 .64rem var(--sans);cursor:pointer;transition:color .15s}
 .bottomnav .ic{width:1.3rem;height:1.3rem;box-sizing:border-box;transition:background .15s,padding .15s,width .15s,height .15s}
-.bottomnav button.active{color:#fff}
-.bottomnav button.active .ic{width:1.9rem;height:1.9rem;padding:.35rem;background:var(--yellow);color:var(--ink);border-radius:30%}
+.bottomnav button.active{color:var(--ink)}
+.bottomnav button.active .ic{width:1.9rem;height:1.9rem;padding:.35rem;background:var(--yellow);color:var(--ink);border-radius:30%;box-shadow:0 0 0 2.5px var(--ink)}
 
 /* Role chip (Admin/Member) */
 .rolechip{display:inline-block;margin:0 0 .7rem;padding:.28rem .75rem;font:800 .72rem var(--sans);box-shadow:4px 4px 0 var(--ink)}
 .rolechip.admin{background:var(--ink);color:#fff}
 .rolechip.member{background:var(--blue);color:#fff}
 
-/* Beranda: tema gelap cuma di layar ini (post-login), biar first impression lebih "wah" */
-body.is-dark{background-color:var(--ink);color:#fff}
-body.is-dark .brand small{color:#8a8985}
-body.is-dark .stat{color:var(--ink)}
-body.is-dark .stat,body.is-dark .act{box-shadow:6px 6px 0 #2c2c2d}
+/* Beranda: light mode, sama kayak layar lain */
 .greet{margin:.5rem 0 1.3rem;font:900 clamp(1.6rem,7.5vw,2rem)/1.1 var(--sans);letter-spacing:-.02em}
 
 /* Stat card admin */
@@ -327,7 +323,7 @@ body.is-dark .stat,body.is-dark .act{box-shadow:6px 6px 0 #2c2c2d}
 .stat b{font:900 1.6rem/1 var(--sans);font-variant-numeric:tabular-nums}
 
 /* Kartu timer member: gratis (kuning, CTA klaim nempel di kartu) + tambahan admin (gelap) -- sengaja dipisah biar gak ketuker */
-.timer-card{margin:0 0 1rem;padding:1.2rem 1.3rem;background:var(--yellow);border-radius:20px;color:var(--ink)}
+.timer-card{margin:0 0 1rem;padding:1.2rem 1.3rem;background:var(--yellow);border:3px solid var(--ink);border-radius:20px;box-shadow:6px 6px 0 var(--ink);color:var(--ink)}
 .timer-card-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.5rem;font:800 .82rem var(--sans)}
 .timer-streak{display:inline-flex;align-items:center;gap:.3rem}
 .timer-streak .ic{width:1rem;height:1rem}
@@ -336,12 +332,12 @@ body.is-dark .stat,body.is-dark .act{box-shadow:6px 6px 0 #2c2c2d}
 .timer-claim{display:flex;align-items:center;justify-content:center;gap:.5rem;width:100%;margin-top:.9rem;padding:.85rem 1rem;background:var(--ink);color:#fff;border:0;border-radius:12px;font:800 .92rem var(--sans);cursor:pointer;transition:transform .1s}
 .timer-claim .ic{width:1.2rem;height:1.2rem}
 .timer-claim:active{transform:scale(.98)}
-.timer-bonus{display:flex;align-items:center;gap:.8rem;margin:0 0 .7rem;padding:1rem 1.2rem;background:#1c1c1d;border-radius:16px;color:#fff}
-.timer-bonus .ic{flex:none;width:1.3rem;height:1.3rem;color:#9a9995}
-.timer-bonus-label{flex:1;font-size:.78rem;color:#c9c8c5}
+.timer-bonus{display:flex;align-items:center;gap:.8rem;margin:0 0 .7rem;padding:1rem 1.2rem;background:var(--card);border:3px solid var(--ink);border-radius:16px;box-shadow:5px 5px 0 var(--ink);color:var(--ink)}
+.timer-bonus .ic{flex:none;width:1.3rem;height:1.3rem}
+.timer-bonus-label{flex:1;font-size:.78rem;color:#43413e}
 .timer-bonus b{font:900 1.25rem/1 var(--sans);font-variant-numeric:tabular-nums}
 .wa-line{margin:0 0 1.6rem;font-size:.72rem}
-.wa-line .link-btn{color:#fff}
+.wa-line .link-btn{color:var(--ink)}
 
 .act{display:flex;align-items:center;gap:1rem;width:100%;margin:0 0 1.1rem;padding:1rem 1.1rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);box-shadow:6px 6px 0 var(--ink);font:800 1.02rem var(--sans);text-align:left;cursor:pointer;transition:transform .1s,box-shadow .1s}
 .act.y{background:var(--yellow)}
@@ -419,7 +415,7 @@ body.is-dark .stat,body.is-dark .act{box-shadow:6px 6px 0 #2c2c2d}
 
 /* Dialog admin */
 dialog#adminPanel{max-width:380px;width:88vw;padding:0;overflow:hidden;background:var(--card);border:3px solid var(--ink);box-shadow:8px 8px 0 var(--ink);font-family:var(--mono);color:var(--ink)}
-dialog#adminPanel::backdrop{background:rgba(0,0,0,.55)}
+dialog#adminPanel::backdrop{background:rgba(231,229,225,.8)}
 .admin-top{position:relative;padding:1rem 3.2rem 1rem 1.3rem;background:var(--yellow);border-bottom:3px solid var(--ink)}
 .admin-top h2{margin:0;font:900 1.08rem var(--sans)}
 .admin-top .modal-x{position:absolute;top:.7rem;right:.9rem}
@@ -428,8 +424,12 @@ dialog#adminPanel label{display:block;margin-bottom:1rem;font-weight:700;font-si
 dialog#adminPanel input{display:block;width:100%;margin-top:.4rem;padding:.6rem .7rem;border:3px solid var(--ink);border-radius:0;background:#fff;color:var(--ink);font:700 .92rem var(--mono)}
 a.gate-btn{text-decoration:none}
 .admin-sub{margin:1.3rem 0 0;padding-top:1.1rem;border-top:2px solid var(--line);font:800 .8rem var(--sans)}
-.user-list{max-height:180px;overflow-y:auto;border:3px solid var(--ink);background:#fff;font-size:.68rem}
-.ul-row{display:flex;align-items:center;gap:.5rem;padding:.5rem .6rem;border-bottom:2px solid var(--line)}
+.user-list{max-height:180px;margin-bottom:1rem;overflow-y:auto;border:3px solid var(--ink);background:#fff;font-size:.68rem}
+.ul-row{display:flex;align-items:center;gap:.5rem;width:100%;padding:.55rem .6rem;background:none;border:0;border-bottom:2px solid var(--line);color:inherit;font:inherit;text-align:left;cursor:pointer}
+.ul-row:hover,.ul-row.sel{background:var(--yellow)}
+.mrow{display:flex;gap:.7rem;align-items:stretch;margin-bottom:.8rem}
+dialog#adminPanel .mrow input{flex:1;width:auto;min-width:0;margin-top:0}
+.mrow .iconbtn{flex:none;height:auto;min-height:46px;background:var(--yellow)}
 .ul-row:last-child{border-bottom:0}
 .ul-mail{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ul-streak{flex:none;display:inline-flex;align-items:center;gap:.3rem;font-weight:800}
@@ -721,9 +721,14 @@ body.is-detail main{padding-top:1.4rem}
     </div>
     <div class="admin-body">
       <div class="seg" style="margin-bottom:1rem"><button class="fchip on" type="button" data-t="one">Satu Member</button><button class="fchip" type="button" data-t="all">Semua Member</button></div>
-      <label id="lblEmail">Email Member
-        <input id="adminEmail" type="email" required placeholder="user@example.com" autocomplete="off">
-      </label>
+      <div id="lblEmail">
+        <label for="adminEmail" style="margin-bottom:.4rem">Email Member</label>
+        <div class="mrow">
+          <input id="adminEmail" type="email" required placeholder="Ketik atau pilih member" autocomplete="off" spellcheck="false">
+          <button type="button" id="adminFind" class="iconbtn" aria-label="Cari member"><svg class="ic"><use href="#i-search"/></svg></button>
+        </div>
+        <div id="adminUserList" class="user-list">Memuat...</div>
+      </div>
       <label>Durasi (Jam)
         <input id="adminHours" type="number" min="1" max="24" value="1" required>
       </label>
@@ -737,12 +742,6 @@ body.is-detail main{padding-top:1.4rem}
       </div>
       <p id="adminMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
       <button type="submit" id="adminSubmit" class="gate-btn">Kirim Akses</button>
-      <h3 class="admin-sub">Daftar Member</h3>
-      <label class="search sm">
-        <svg class="ic"><use href="#i-search"/></svg>
-        <input id="adminUserSearch" type="search" placeholder="Cari email..." autocomplete="off" spellcheck="false">
-      </label>
-      <div id="adminUserList" class="user-list">Memuat...</div>
     </div>
   </form>
 </dialog>
@@ -921,8 +920,6 @@ body.is-detail main{padding-top:1.4rem}
     navHome.classList.toggle('active', name === 'home' || name === 'admin');
     navTools.classList.toggle('active', name === 'tools' || name === 'detail');
     navProfile.classList.toggle('active', name === 'profile');
-    document.body.classList.toggle('is-dark', name === 'home');
-    if (themeColorMeta) themeColorMeta.setAttribute('content', name === 'home' ? '#0a0a0a' : '#E7E5E1');
     closeMenu();
   }
   function go(v) { view = v; window.scrollTo(0, 0); render(); }
@@ -996,13 +993,15 @@ body.is-detail main{padding-top:1.4rem}
     const box = $('adminUserList');
     if (!box) return;
     if (!adminUserListCache.length) { box.textContent = 'Belum ada member.'; return; }
-    const searchEl = $('adminUserSearch');
-    const q = searchEl ? norm(searchEl.value) : '';
-    const rows = q ? adminUserListCache.filter(u => norm(u.email).includes(q)) : adminUserListCache;
+    const q = norm(adminEmailInput.value).trim();
+    const picked = adminUserListCache.some(u => norm(u.email) === q);
+    const rows = q && !picked ? adminUserListCache.filter(u => norm(u.email).includes(q)) : adminUserListCache;
     if (!rows.length) { box.textContent = 'Gak ketemu.'; return; }
     box.innerHTML = '';
     rows.forEach(u => {
-      const row = el('div', 'ul-row');
+      const row = el('button', 'ul-row' + (norm(u.email) === q ? ' sel' : ''));
+      row.type = 'button';
+      row.addEventListener('click', () => pickMember(u.email));
       row.append(el('span', 'ul-mail', u.email));
       const streakEl = el('span', 'ul-streak');
       streakEl.append(svgUse('i-flame', 'ic'), document.createTextNode(' ' + u.streak));
@@ -1235,7 +1234,23 @@ body.is-detail main{padding-top:1.4rem}
   navHome.addEventListener('click', () => go('home'));
   navTools.addEventListener('click', () => go('tools'));
   $('menuClose').addEventListener('click', closeMenu);
-  $('adminUserSearch').addEventListener('input', renderAdminUserList);
+  // Tap member di list -> email langsung keisi, fokus lompat ke Durasi: admin tinggal ketik jam + Enter.
+  function pickMember(email) {
+    adminEmailInput.value = email;
+    adminMsg.hidden = true;
+    renderAdminUserList();
+    adminHoursInput.focus();
+    adminHoursInput.select();
+  }
+  adminEmailInput.addEventListener('input', renderAdminUserList);
+  adminEmailInput.addEventListener('keydown', e => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const q = norm(adminEmailInput.value).trim();
+    const hit = q && (adminUserListCache.find(u => norm(u.email) === q) || adminUserListCache.find(u => norm(u.email).includes(q)));
+    if (hit) pickMember(hit.email); else adminHoursInput.focus();
+  });
+  $('adminFind').addEventListener('click', () => { adminEmailInput.focus(); adminEmailInput.select(); renderAdminUserList(); });
   document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
   $('menuProfile').addEventListener('click', () => go('profile'));
