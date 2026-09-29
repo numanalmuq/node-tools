@@ -3,7 +3,6 @@
     {
       "name": "SvgToXmlAm",
       "description": "Convert SVG jadi format XML buat Alight Motion."
-      "steps": "masukkan svg dan convert."
     },
     {
       "name": "AmTextGenerator",
