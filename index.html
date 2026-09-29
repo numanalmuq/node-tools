@@ -15,7 +15,7 @@
   NODE TOOLS — engine. Gak perlu diedit lagi buat nambah tool baru.
   Tambah tool: buat tools/<slug>.html (taruh <script src="../guard.js"></script> PALING ATAS <head>-nya), lalu isi data.json (name, description, thumbnail).
 
-  Field OPSIONAL di data.json (boleh gak diisi): category (warna ikon per kategori), tag ("Populer"/"Baru"), steps (maks 3 langkah cara pakai).
+  Field OPSIONAL di data.json (boleh gak diisi): category (warna ikon per kategori), tag ("Populer"/"Baru"), steps (maks 3 langkah cara pakai), input + output (format, mis. "SVG" dan "AM XML", tampil sebagai alur di kartu).
 
   UI/UX file ini udah dirombak total ngikutin wireframe Neo-Brutalism (bottom nav, menu drawer, list tools,
   stat card admin, dll) TAPI seluruh logika di bawah (Firebase, timer, streak, admin grant) PERSIS SAMA
@@ -495,6 +495,43 @@ body.is-detail main{padding-top:1.4rem}
 .gift button{flex:none;padding:.55rem .85rem;background:var(--ink);color:#fff;border:0;border-radius:10px;font:800 .78rem var(--sans);cursor:pointer}
 .gift button:disabled{opacity:.55}
 
+/* Hierarki visual: CTA utama paling tebal, info sekunder makin tipis, sudut tegas (bukan rounded) */
+.logomark,.login-logo,.splash .logomark,.bottomnav button.active .ic,.timer-card,.timer-claim,.gift,.gift button{border-radius:0}
+.logomark{box-shadow:3px 3px 0 var(--ink)}
+.gift{border:3px solid var(--ink)}
+.act{box-shadow:3px 3px 0 var(--ink)}
+.act.y,.gate-btn{box-shadow:6px 6px 0 var(--ink)}
+.act:hover{box-shadow:5px 5px 0 var(--ink)}
+.act.y:hover{box-shadow:8px 8px 0 var(--ink)}
+.act:active,.act.y:active{box-shadow:1px 1px 0 var(--ink)}
+.stat,.card,.chart{box-shadow:4px 4px 0 var(--ink)}
+.card:hover{box-shadow:6px 6px 0 var(--ink)}
+.card:active{box-shadow:1px 1px 0 var(--ink)}
+.search{box-shadow:3px 3px 0 var(--ink)}
+.search:focus-within{box-shadow:5px 5px 0 var(--ink)}
+.state{box-shadow:2px 2px 0 var(--ink)}
+.greet{font-size:clamp(2.2rem,11vw,3rem);line-height:1}
+.bar h2{font-size:clamp(1.5rem,7vw,2.1rem)}
+.timer-big{font-size:clamp(2.6rem,15vw,3.6rem)}
+.acc-detail{display:flex;flex-wrap:wrap;gap:.3rem 1.2rem;margin:.55rem 0 0;font-size:.72rem}
+.acc-detail b{font-weight:800}
+.sec-h{margin:1.6rem 0 .7rem}
+.sec-h h3{margin:0;font:900 1.05rem var(--sans)}
+#recent{margin:0 0 1.3rem}
+.rc span{flex:1;min-width:0;overflow-wrap:anywhere}
+.rc .ic{width:1rem;height:1rem}
+.thumb.mini{width:2.3rem;height:2.3rem;border-width:2.5px}
+.thumb.mini .ph{font-size:.95rem}
+.body .meta{font:700 .66rem var(--mono);color:#6b6a68}
+.state div{display:flex;flex-direction:column;align-items:flex-start;gap:.3rem}
+.state small{font:500 .76rem var(--mono);color:#43413e}
+.dt-info{display:flex;flex-wrap:wrap;gap:3px;margin:0 0 1.2rem;background:var(--ink);border:3px solid var(--ink)}
+.dt-info div{flex:1 1 40%;padding:.55rem .8rem;background:var(--card)}
+.dt-info small{display:block;font:800 .62rem var(--sans);color:#6b6a68}
+.dt-info b{font:900 .88rem var(--sans);overflow-wrap:anywhere}
+.menu-list a{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;border-bottom:2px solid var(--line);color:var(--ink);font:800 .9rem var(--sans);text-decoration:none}
+.menu-list a:hover{background:var(--paper)}
+
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 </head>
@@ -534,9 +571,8 @@ body.is-detail main{padding-top:1.4rem}
         <span id="menuRole" class="rolechip member">Member</span>
       </div>
       <nav class="menu-list">
-        <button id="menuHome" type="button"><svg class="ic"><use href="#i-home"/></svg>Beranda</button>
-        <button id="menuTools" type="button"><svg class="ic"><use href="#i-tools"/></svg>Semua Tools</button>
-        <button id="menuProfile" type="button"><svg class="ic"><use href="#i-user"/></svg>Profil</button>
+        <button id="menuGuide" type="button"><svg class="ic"><use href="#i-info"/></svg>Panduan</button>
+        <a id="menuHelp" target="_blank" rel="noopener" href="#"><svg class="ic"><use href="#i-chat"/></svg>Bantuan</a>
         <button id="menuDash" type="button" hidden><svg class="ic"><use href="#i-cal"/></svg>Dashboard Admin</button>
         <button id="menuAdd" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg>Tambah Akses</button>
         <button id="menuOut" type="button"><svg class="ic"><use href="#i-arrow"/></svg>Keluar</button>
@@ -608,29 +644,33 @@ body.is-detail main{padding-top:1.4rem}
     <section id="panelMember" hidden>
       <div class="timer-card">
         <div class="timer-card-head">
-          <span>Timer Gratis</span>
+          <span id="accLabel">AKSES AKTIF</span>
           <span class="timer-streak"><svg class="ic"><use href="#i-flame"/></svg><b id="memberStreak">0</b><span>hari</span></span>
         </div>
-        <b class="timer-big js-remain-free">0:00</b>
+        <b class="timer-big js-remain">0:00</b>
+        <p class="acc-detail"><span>Gratis <b class="js-remain-free">0:00</b></span><span>Bonus admin <b class="js-remain-bonus">0:00</b></span></p>
         <p id="freeHint" class="timer-hint"></p>
         <button id="claimBtn" class="timer-claim" type="button" hidden>
           <svg class="ic"><use href="#i-clock"/></svg><span>Mulai Timer Harian</span>
         </button>
         <p id="claimMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
       </div>
-      <div class="timer-bonus">
-        <svg class="ic"><use href="#i-plus"/></svg>
-        <span class="timer-bonus-label">Timer Tambahan (Admin)</span>
-        <b class="js-remain-bonus">0:00</b>
-      </div>
+    </section>
+
+    <section id="recentSec" hidden>
+      <div class="sec-h"><h3 id="recentH">Tools terakhir dipakai</h3></div>
+      <div id="recent"></div>
+    </section>
+
+    <button id="allBtn" class="act y" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+    <button id="dashBtn" class="act" type="button" hidden><svg class="ic"><use href="#i-cal"/></svg><span>Dashboard Admin</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+    <button id="addBtn" class="act" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+
+    <section id="panelMember2" hidden>
       <div id="giftBox"></div>
       <p id="giftMsg" class="gate-msg" role="status" aria-live="polite" hidden></p>
       <p class="wa-line"><a id="waBtnHome" class="link-btn" target="_blank" rel="noopener" href="#">Minta tambahan waktu ke admin (WA)<svg class="ic"><use href="#i-arrow"/></svg></a></p>
     </section>
-
-    <button id="dashBtn" class="act" type="button" hidden><svg class="ic"><use href="#i-cal"/></svg><span>Dashboard Admin</span><svg class="ic"><use href="#i-arrow"/></svg></button>
-    <button id="addBtn" class="act y" type="button" hidden><svg class="ic"><use href="#i-plus"/></svg><span>Tambah Akses</span><svg class="ic"><use href="#i-arrow"/></svg></button>
-    <button id="allBtn" class="act" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Lihat Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
   </section>
 
   <section id="screen-tools" hidden>
@@ -660,6 +700,12 @@ body.is-detail main{padding-top:1.4rem}
     </div>
     <div class="dt-hero"><div id="dtThumb" class="thumb"></div><div><h2 id="dtName"></h2><span id="dtTag" class="tag" hidden></span></div></div>
     <p id="dtDesc" class="dt-desc"></p>
+    <div class="dt-info">
+      <div><small>Format input</small><b id="dtIn"></b></div>
+      <div><small>Format output</small><b id="dtOut"></b></div>
+      <div><small>Kategori</small><b id="dtCat"></b></div>
+      <div><small>Akses</small><b id="dtAccV">Sisa <span class="js-remain">0:00</span></b><b id="dtAdm" hidden>Admin</b></div>
+    </div>
     <h3 class="pf-h">Cara pakai</h3>
     <ol id="dtSteps" class="steps"></ol>
     <a id="dtGo" class="gate-btn" href="#"><span>Pakai Sekarang</span><svg class="ic"><use href="#i-arrow"/></svg></a>
@@ -817,6 +863,8 @@ body.is-detail main{padding-top:1.4rem}
     const body = el('div', 'body');
     body.append(el('h2', null, t.name));
     if (t.desc) body.append(el('p', null, t.desc));
+    const meta = t.io.length ? t.io[0] + ' → ' + t.io[1] : t.catL;
+    if (meta) body.append(el('p', 'meta', meta));
     if (t.label) body.append(el('span', 'tag' + (t.label === 'Baru' ? ' new' : ''), t.label));
     const fav = el('button', 'fav');
     fav.type = 'button';
@@ -833,12 +881,14 @@ body.is-detail main{padding-top:1.4rem}
     const terms = norm(input.value).split(/\s+/).filter(Boolean);
     let shown = 0;
     for (const t of tools) {
-      const ok = terms.every(w => t.hay.includes(w)) && (mode === 'all' || (mode === 'fav' ? favs.includes(t.name) : t.fresh));
+      const ok = terms.every(w => t.hay.includes(w)) && (mode === 'all' || (mode === 'fav' ? favs.includes(t.name) : mode === 'new' ? t.fresh : t.cat === mode.slice(2)));
       t.node.hidden = !ok;
       if (ok) shown++;
     }
     if (shown) stateEl.hidden = true;
-    else setState('empty', mode === 'fav' && !terms.length ? 'Belum ada favorit. Tap bintang di tool.' : 'Tools gak ketemu.');
+    else if (mode === 'fav' && !terms.length) setEmpty('Belum ada favorit', 'Tap bintang pada tool yang sering kamu pakai.', 'Lihat semua tools', () => pickMode('all'));
+    else if (terms.length) setEmpty('Nggak ketemu', 'Nggak ada tool yang cocok dengan "' + input.value.trim() + '".', 'Hapus pencarian', () => { input.value = ''; filter(); input.focus(); });
+    else setEmpty('Belum ada tool di sini', 'Coba filter lain.', 'Lihat semua tools', () => pickMode('all'));
   }
 
   async function load() {
@@ -857,7 +907,8 @@ body.is-detail main{padding-top:1.4rem}
         const slug = slugify(name);
         if (!slug) return [];
         const desc = String(t?.description ?? '').trim();
-        const cat = String(t?.category ?? '').trim().toLowerCase();
+        const catL = String(t?.category ?? '').trim(), cat = catL.toLowerCase();
+        const inp = String(t?.input ?? '').trim(), out = String(t?.output ?? '').trim(), io = inp && out ? [inp, out] : [];
         const tg = String(t?.tag ?? '').trim().toLowerCase();
         const tag = tg === 'populer' ? 'Populer' : tg === 'baru' ? 'Baru' : '';
         const fresh = N > 3 && i >= N - 3;
@@ -865,9 +916,9 @@ body.is-detail main{padding-top:1.4rem}
           i, name, desc,
           thumb: String(t?.thumbnail ?? '').trim(),
           href: 'tools/' + encodeURIComponent(slug) + '.html',
-          hay: norm(name + ' ' + desc),
+          hay: norm(name + ' ' + desc + ' ' + catL + ' ' + io.join(' ')),
           c: COLORS[(cat ? (cats.includes(cat) ? cats.indexOf(cat) : cats.push(cat) - 1) : i) % COLORS.length],
-          fresh, label: tag || (fresh ? 'Baru' : ''),
+          fresh, cat, catL, io, label: tag || (fresh ? 'Baru' : ''),
           steps: Array.isArray(t?.steps) ? t.steps.slice(0, 3).map(x => String(x)) : []
         };
         o.node = buildCard(o);
@@ -877,7 +928,11 @@ body.is-detail main{padding-top:1.4rem}
       if (!tools.length) return setState('empty', 'Belum ada tools.');
       grid.append(...tools.map(t => t.node));
       tools.forEach(paintFav);
+      const seen = new Map(), first = document.querySelector('.fchip[data-m="all"]');
+      tools.forEach(t => { if (t.cat && !seen.has(t.cat)) seen.set(t.cat, t.catL); });
+      [...seen].reverse().forEach(([k, l]) => { const b = el('button', 'fchip', l); b.type = 'button'; b.dataset.m = 'c:' + k; first.after(b); });
       filter();
+      paintRecent();
     } catch (err) {
       console.error('[Node Tools]', err);
       setState('error', 'Gagal memuat tools.');
@@ -886,11 +941,26 @@ body.is-detail main{padding-top:1.4rem}
   }
 
   input.addEventListener('input', () => { if (tools.length) filter(); });
-  document.querySelectorAll('.fchip[data-m]').forEach(b => b.addEventListener('click', () => {
-    mode = b.dataset.m;
-    document.querySelectorAll('.fchip[data-m]').forEach(x => x.classList.toggle('on', x === b));
+  function pickMode(m) {
+    mode = m;
+    document.querySelectorAll('.fchip[data-m]').forEach(x => x.classList.toggle('on', x.dataset.m === m));
     if (tools.length) filter();
-  }));
+  }
+  document.querySelector('.chips').addEventListener('click', e => {
+    const b = e.target.closest('.fchip[data-m]');
+    if (b) pickMode(b.dataset.m);
+  });
+  // Empty state yang kasih langkah lanjut, bukan cuma bilang gagal
+  function setEmpty(title, sub, label, fn) {
+    stateEl.className = 'state empty';
+    stateEl.hidden = false;
+    const b = el('button', 'link-btn', label);
+    b.type = 'button';
+    b.addEventListener('click', fn);
+    const box = el('div');
+    box.append(el('b', null, title), el('small', null, sub), b);
+    stateEl.replaceChildren(box);
+  }
 
   // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
   const $ = id => document.getElementById(id);
@@ -947,6 +1017,8 @@ body.is-detail main{padding-top:1.4rem}
       bonusNodes.forEach(n => { n.textContent = fmt(Math.max(0, bonusRemain)); });
       if (!currentAuth.isAdmin) {
         paintFreeHint(freeRemain);
+        const al = $('accLabel');
+        if (al) al.textContent = totalRemain > 0 ? 'AKSES AKTIF' : currentAuth.claimedToday ? 'AKSES HABIS' : 'BELUM MULAI';
         // Abis: cukup stop interval-nya di sini. Home udah nampilin state "abis" secara inline,
         // JANGAN panggil render() lagi di sini -- bisa infinite loop (render->startCountdown->tick->render->...).
         if (totalRemain <= 0) stopCountdown();
@@ -1047,6 +1119,22 @@ body.is-detail main{padding-top:1.4rem}
     }).catch(err => console.error('[Node Tools] Hadiah gagal dimuat:', err));
   }
 
+  // Tools terakhir dipakai (dari riwayat); kalau belum ada riwayat, tampilkan tools populer/pertama
+  function paintRecent() {
+    const h = store.get('nt_hist', []).map(x => tools.find(t => t.name === x.n)).filter(Boolean).slice(0, 3);
+    const list = h.length ? h : tools.filter(t => t.label === 'Populer').concat(tools).filter((t, i, a) => a.indexOf(t) === i).slice(0, 3);
+    $('recentSec').hidden = !list.length;
+    $('recentH').textContent = h.length ? 'Tools terakhir dipakai' : 'Mulai dari sini';
+    $('recent').replaceChildren(...list.map(t => {
+      const r = el('button', 'row rc'), th = mkThumb(t);
+      r.type = 'button';
+      th.classList.add('mini');
+      r.append(th, el('span', null, t.name), svgUse('i-arrow', 'ic'));
+      r.addEventListener('click', () => openDetail(t));
+      return r;
+    }));
+  }
+
   function paintHome() {
     const ad = currentAuth.isAdmin;
     const roleText = ad ? 'Admin' : 'Member';
@@ -1058,6 +1146,8 @@ body.is-detail main{padding-top:1.4rem}
     $('greet').textContent = ad ? 'Halo, Admin!' : 'Halo, Member!';
     $('panelAdmin').hidden = !ad;
     $('panelMember').hidden = ad;
+    $('panelMember2').hidden = ad;
+    paintRecent();
     $('claimBtn').hidden = ad || currentAuth.claimedToday;
     $('addBtn').hidden = !ad;
     $('menuAdd').hidden = !ad;
@@ -1076,6 +1166,8 @@ body.is-detail main{padding-top:1.4rem}
     if (a) a.href = href;
     const h = $('pfHelp');
     if (h) h.href = href;
+    const mh = $('menuHelp');
+    if (mh) mh.href = href;
   }
 
   function render() {
@@ -1123,6 +1215,10 @@ body.is-detail main{padding-top:1.4rem}
     tg.textContent = t.label;
     tg.className = 'tag' + (t.label === 'Baru' ? ' new' : '');
     $('dtGo').href = t.href;
+    $('dtIn').textContent = t.io[0] || ''; $('dtOut').textContent = t.io[1] || '';
+    $('dtIn').parentNode.hidden = $('dtOut').parentNode.hidden = !t.io.length;
+    $('dtCat').textContent = t.catL; $('dtCat').parentNode.hidden = !t.catL;
+    $('dtAccV').hidden = currentAuth.isAdmin; $('dtAdm').hidden = !currentAuth.isAdmin;
     paintFav(t);
     const st = t.steps.length ? t.steps : ['Buka tool lewat tombol di bawah.', 'Masukkan atau tempel kontenmu.', 'Salin atau unduh hasilnya.'];
     $('dtSteps').replaceChildren(...st.map(x => el('li', null, x)));
@@ -1172,9 +1268,9 @@ body.is-detail main{padding-top:1.4rem}
 
   // ---------- Intro: splash + onboarding (sekali per perangkat, bisa dilewati) ----------
   const SLIDES = [
-    ['i-tools', '--yellow', 'Semua tools editor, satu tempat', 'Teks, gambar, JSON, dan kode. Buka lewat browser, tanpa pasang apa-apa.'],
-    ['i-flame', '--blue', 'Klaim jam gratis tiap hari', 'Tekan Mulai Timer sekali sehari. Makin panjang streak, makin banyak jam.'],
-    ['i-plus', '--green', 'Butuh lebih? Minta ke admin', 'Ajukan tugas atau bayar lewat WhatsApp untuk tambahan waktu.']
+    ['i-tools', '--yellow', 'Convert, generate, edit. Tanpa install.', 'Teks, gambar, JSON, dan kode. Langsung dari browser, satu tempat.'],
+    ['i-flame', '--blue', '1 klaim tiap hari. Streak = jam lebih banyak.', 'Tekan Mulai Timer sekali sehari. Makin panjang streak, makin banyak jam.'],
+    ['i-plus', '--green', 'Butuh akses tambahan? Hubungi admin.', 'Ajukan tugas atau bayar lewat WhatsApp untuk tambahan waktu.']
   ];
   function paintOb() {
     const sl = SLIDES[obIdx];
@@ -1223,9 +1319,7 @@ body.is-detail main{padding-top:1.4rem}
   $('claimBtn').addEventListener('click', () => claimTimer($('claimBtn'), $('claimMsg')));
   $('menuOut').addEventListener('click', signOutNow);
   $('allBtn').addEventListener('click', () => go('tools'));
-  $('menuTools').addEventListener('click', () => go('tools'));
   $('backBtn').addEventListener('click', () => go('home'));
-  $('menuHome').addEventListener('click', () => go('home'));
   $('addBtn').addEventListener('click', openAdmin);
   $('menuAdd').addEventListener('click', openAdmin);
   $('adminClose').addEventListener('click', () => adminPanel.close());
@@ -1253,7 +1347,6 @@ body.is-detail main{padding-top:1.4rem}
   $('adminFind').addEventListener('click', () => { adminEmailInput.focus(); adminEmailInput.select(); renderAdminUserList(); });
   document.addEventListener('click', e => { if (!menu.hidden && !menu.contains(e.target)) closeMenu(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeMenu(); });
-  $('menuProfile').addEventListener('click', () => go('profile'));
   $('menuDash').addEventListener('click', () => go('admin'));
   $('dashBtn').addEventListener('click', () => go('admin'));
   $('adBack').addEventListener('click', () => go('home'));
@@ -1263,7 +1356,9 @@ body.is-detail main{padding-top:1.4rem}
   $('dtGo').addEventListener('click', () => cur && addHist(cur.name));
   $('pfOut').addEventListener('click', signOutNow);
   $('pfClear').addEventListener('click', () => { store.set('nt_hist', []); paintProfile(); });
-  $('pfGuide').addEventListener('click', () => { guide = true; obIdx = 0; intro = 'onboard'; render(); });
+  const showGuide = () => { guide = true; obIdx = 0; intro = 'onboard'; render(); };
+  $('pfGuide').addEventListener('click', showGuide);
+  $('menuGuide').addEventListener('click', showGuide);
   $('obNext').addEventListener('click', () => { if (obIdx < SLIDES.length - 1) { obIdx++; paintOb(); } else endIntro(); });
   $('obSkip').addEventListener('click', endIntro);
   $('screen-splash').addEventListener('click', afterSplash);
