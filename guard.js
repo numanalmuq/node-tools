@@ -1,21 +1,22 @@
-// guard.js — WAJIB ditaruh PALING ATAS <head>, sebelum tag/script lain, di SETIAP tools/<slug>.html:
-//   <script src="../guard.js"></script>
-//
-// Tugasnya: ngecek user udah login Google + masih punya sisa akses (timer gratis ATAU timer tambahan
-// admin, atau akun admin) SEBELUM konten tool kebuka. Kalau enggak, halaman langsung dilempar balik ke
-// index.html (biar user ketemu layar login/mulai-timer/akses-abis di sana) tanpa sempat lihat isi tool.
-//
-// firebaseConfig di bawah ini HARUS SAMA PERSIS dengan firebaseConfig di index.html. Kalau kamu ganti
-// project Firebase, update di DUA tempat itu.
+/*
+  guard.js — pelindung halaman tools/*.html.
+  Taruh PALING ATAS <head> tiap tool: <script src="../guard.js"></script>
+  Letak file: sejajar dengan index.html (bukan di dalam tools/).
+
+  Halaman disembunyiin dulu. Kebuka cuma kalau sudah login DAN (admin ATAU timer gratis/bonus masih nyala).
+  Belum mulai timer / waktu habis -> balik ke index.html. Kalau waktu habis pas tool lagi dipakai,
+  halaman langsung dikunci saat itu juga (bukan nunggu refresh).
+  Catatan: ini gembok sisi-browser (halaman statis), jadi buat ngeblok pemakaian normal, bukan anti-oprek.
+*/
 (() => {
-  'use strict';
+  const root = document.documentElement;
+  root.style.visibility = 'hidden';
 
-  // Sembunyiin seluruh halaman dulu sampai status akses jelas, biar konten tool gak sempat kelihatan
-  // (walau cuma sekilas) sebelum ketauan boleh diakses apa nggak.
-  const hideStyle = document.createElement('style');
-  hideStyle.textContent = 'html{visibility:hidden!important}';
-  document.head.appendChild(hideStyle);
+  const ADMIN_EMAILS = ['myxrin2748@gmail.com', 'namskyfr@gmail.com'];
+  const HOME = new URL('index.html', document.currentScript.src).href;
+  const kick = () => location.replace(HOME);
 
+  // Harus sama persis dengan firebaseConfig di index.html
   const firebaseConfig = {
     apiKey: "AIzaSyD6H9BVv-8lMi-YM7i69cjattWzMBHfHkg",
     authDomain: "node-tools-ctfy.firebaseapp.com",
@@ -24,22 +25,35 @@
     messagingSenderId: "1065352327411",
     appId: "1:1065352327411:web:904f269ddfaf86edb7c786"
   };
-  const ADMIN_EMAILS = ['myxrin2748@gmail.com', 'namskyfr@gmail.com'];
-  const HOME_URL = '../index.html'; // lokasi index.html relatif dari tools/<slug>.html -- ubah kalau struktur folder beda
-
-  let settled = false;
-  const reveal = () => { if (!settled) { settled = true; hideStyle.remove(); } };
-  const deny = () => { if (!settled) { settled = true; location.replace(HOME_URL); } };
-
-  // Kalau Firebase lemot/gak respons, jangan nyangkut nutup selama-lamanya -- lempar balik ke home.
-  const failsafe = setTimeout(deny, 12000);
 
   (async () => {
     try {
-      const [{ initializeApp }, authMod, fsMod] = await Promise.all([
-        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-app.js'),
-        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js'),
-        import('https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js')
+      const B = 'https://www.gstatic.com/firebasejs/12.7.0/';
+      const [{ initializeApp }, { getAuth, onAuthStateChanged }, { getFirestore, doc, onSnapshot }] = await Promise.all([
+        import(B + 'firebase-app.js'), import(B + 'firebase-auth.js'), import(B + 'firebase-firestore.js')
       ]);
-
       const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app), db = getFirestore(app);
+      let lockTimer = null, unsub = null;
+
+      onAuthStateChanged(auth, (user) => {
+        if (unsub) { unsub(); unsub = null; }
+        clearTimeout(lockTimer);
+        if (!user) return kick();
+        if (ADMIN_EMAILS.includes((user.email || '').toLowerCase())) { root.style.visibility = ''; return; }
+
+        unsub = onSnapshot(doc(db, 'users', user.uid), (snap) => {
+          clearTimeout(lockTimer);
+          const d = snap.data() || {};
+          const left = Math.max(Number(d.freeUntil || 0), Number(d.bonusUntil || 0)) - Date.now();
+          if (left <= 0) return kick();       // belum mulai timer, atau sudah habis
+          root.style.visibility = '';
+          lockTimer = setTimeout(kick, left + 300); // kunci otomatis pas waktu habis
+        }, kick);
+      });
+    } catch (err) {
+      console.error('[Node Tools] guard gagal:', err);
+      kick();
+    }
+  })();
+})();
