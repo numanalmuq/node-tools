@@ -42,6 +42,8 @@
   4. Email admin ada di 2 tempat, kalau mau ganti/nambah HARUS diubah di keduanya biar konsisten:
      - ADMIN_EMAILS di script bawah (cuma buat nampilin tombol Admin)
      - fungsi isAdmin() di firestore.rules (ini yang beneran nentuin siapa yang boleh nambah akses)
+  5. Chat Global (pesan hangus 7 hari): buat TTL policy SEKALI di Google Cloud Console > Firestore > Time-to-live > Create Policy
+     -> Collection group: chat, Timestamp field: expireAt (Expiration offset biarkan 0). Atau: gcloud firestore fields ttls update expireAt --collection-group=chat --enable-ttl
 -->
 
 <!-- ===== Firebase: Auth (Google only) + Firestore (timer gratis harian + timer tambahan admin, kepisah) ===== -->
@@ -52,7 +54,7 @@
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-auth.js";
   import {
     getFirestore, doc, getDoc, setDoc, onSnapshot, serverTimestamp,
-    collection, query, where, getDocs, updateDoc, addDoc
+    collection, query, where, getDocs, updateDoc, addDoc, orderBy, limit, Timestamp, deleteField
   } from "https://www.gstatic.com/firebasejs/12.7.0/firebase-firestore.js";
 
   // GANTI dengan config Firebase project kamu sendiri (lihat komentar di atas). Harus sama persis dengan guard.js.
@@ -213,6 +215,41 @@
     });
     list.sort((a, b) => b.streak - a.streak || b.remainMs - a.remainMs);
     return list;
+  };
+
+  // ---------- Chat Global ----------
+  // Pesan hangus 7 hari: field expireAt dipakai TTL Firestore (policy dibuat sekali di Google Cloud Console). Layar tetap nyaring 7 hari sendiri
+  // karena TTL baru ngehapus paling lama ~24 jam setelah lewat. Pesan tersemat = expireAt dihapus admin, jadi gak ikut kehapus.
+  const CHAT_DAYS = 7;
+  window.ntIsAdminEmail = (e) => ADMIN_EMAILS.includes(String(e || '').toLowerCase());
+  window.ntChatSend = async (text) => {
+    const user = auth.currentUser;
+    if (!user) throw new Error('Kamu belum login.');
+    const t = String(text || '').trim().slice(0, 300);
+    if (!t) throw new Error('Pesan kosong.');
+    await addDoc(collection(db, 'chat'), {
+      email: (user.email || '').toLowerCase(), text: t, pinned: false,
+      createdAt: serverTimestamp(),
+      expireAt: Timestamp.fromMillis(Date.now() + CHAT_DAYS * ONE_DAY)
+    });
+  };
+  // Live: 50 pesan terbaru (umur < 7 hari) + maks 3 pesan tersemat. Balik fungsi buat berhenti dengerin (dipanggil pas keluar dari layar chat).
+  window.ntChatListen = (onFeed, onPinned, onErr) => {
+    const since = Timestamp.fromMillis(Date.now() - CHAT_DAYS * ONE_DAY);
+    const rows = (s) => s.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
+    const u1 = onSnapshot(query(collection(db, 'chat'), where('createdAt', '>', since), orderBy('createdAt', 'desc'), limit(50)),
+      (s) => onFeed(rows(s).reverse()), onErr);
+    const u2 = onSnapshot(query(collection(db, 'chat'), where('pinned', '==', true), limit(20)),
+      (s) => onPinned(rows(s).sort((a, b) => b.createdAt.toMillis() - a.createdAt.toMillis()).slice(0, 3)), onErr);
+    return () => { u1(); u2(); };
+  };
+  // Admin: sematkan (expireAt dihapus -> gak kena TTL) / lepas sematan (expireAt balik = waktu kirim + 7 hari; kalau udah lewat, ikut kehapus).
+  window.ntChatPin = async (id, pin, createdMs) => {
+    const user = auth.currentUser;
+    if (!user || !ADMIN_EMAILS.includes((user.email || '').toLowerCase())) throw new Error('Khusus admin.');
+    await updateDoc(doc(db, 'chat', id), pin
+      ? { pinned: true, expireAt: deleteField() }
+      : { pinned: false, expireAt: Timestamp.fromMillis(createdMs + CHAT_DAYS * ONE_DAY) });
   };
 
   let unsubscribe = null;
@@ -541,6 +578,33 @@ body.is-detail main{padding-top:1.4rem}
 .tag{transform:translate(2px,-1px) rotate(-2deg)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* Chat Global: bubble ngikut style web (border tebal + hard shadow). Kuning = pesan sendiri, hitam = admin, biru = tersemat */
+#screen-chat:not([hidden]){display:flex;flex-direction:column;min-height:calc(100dvh - 11.5rem)}
+.chat-pins{display:flex;flex-direction:column;gap:.6rem;margin:0 6px 1rem 0}
+.chat-pin{display:flex;align-items:flex-start;gap:.6rem;padding:.6rem .8rem;background:var(--blue);color:#fff;border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink);font-size:.76rem}
+.chat-pin>.ic{flex:none;width:1rem;height:1rem;margin-top:.1rem}
+.chat-pin div{flex:1;min-width:0}
+.chat-pin b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:800 .64rem var(--mono);opacity:.85}
+.chat-pin span{overflow-wrap:anywhere;white-space:pre-wrap}
+.chat-list{flex:1;display:flex;flex-direction:column;gap:.9rem;padding:0 6px 1rem 0}
+.msg{align-self:flex-start;max-width:88%;min-width:9rem;padding:.55rem .8rem .7rem;background:var(--card);border:3px solid var(--ink);box-shadow:4px 4px 0 var(--ink)}
+.msg.me{align-self:flex-end;background:var(--yellow)}
+.msg.adm{background:var(--ink);color:#fff}
+.msg-meta{display:flex;align-items:center;gap:.5rem;margin-bottom:.3rem;font:700 .64rem var(--mono)}
+.msg-mail{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.msg-time{flex:none;margin-left:auto;opacity:.6}
+.msg-text{font-size:.88rem;overflow-wrap:anywhere;white-space:pre-wrap}
+.msg-pinbtn{flex:none;display:grid;place-items:center;width:1.5rem;height:1.5rem;padding:0;background:none;border:0;color:inherit;cursor:pointer;opacity:.55}
+.msg-pinbtn .ic{width:.95rem;height:.95rem}
+.msg-pinbtn.on{opacity:1}
+.msg-pinbtn.on .ic{fill:var(--yellow)}
+.msg.me:not(.adm) .msg-pinbtn.on .ic{fill:var(--ink)}
+.msg-pinbtn:disabled{opacity:.3;cursor:progress}
+.chat-form{position:sticky;bottom:calc(4.4rem + env(safe-area-inset-bottom,0px));z-index:5;display:flex;gap:.8rem;padding:.8rem 6px .8rem 0;background:var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .16 0'/%3E%3C/filter%3E%3Crect width='180' height='180' filter='url(%23n)'/%3E%3C/svg%3E")}
+.chat-form input{flex:1;min-width:0;padding:.7rem .9rem;background:var(--card);color:var(--ink);border:3px solid var(--ink);border-radius:0;box-shadow:4px 4px 0 var(--ink);font:700 .9rem var(--mono);outline:0;transition:transform .12s,box-shadow .12s}
+.chat-form input:focus{transform:translate(-2px,-2px);box-shadow:6px 6px 0 var(--ink)}
+.chat-form .iconbtn{background:var(--yellow)}
 </style>
 </head>
 <body>
@@ -559,7 +623,8 @@ body.is-detail main{padding-top:1.4rem}
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></symbol>
   <symbol id="i-search" viewBox="0 0 24 24"><path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/></symbol>
   <symbol id="i-chat" viewBox="0 0 24 24"><path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/></symbol>
-  <symbol id="i-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></symbol><symbol id="i-send" viewBox="0 0 24 24"><path d="M14.536 21.686a.5.5 0 0 0 .937-.024l6.5-19a.496.496 0 0 0-.635-.635l-19 6.5a.5.5 0 0 0-.024.937l7.93 3.18a2 2 0 0 1 1.112 1.11z"/><path d="m21.854 2.147-10.94 10.939"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
   <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 3q1 4 4 6.5t3 5.5a1 1 0 0 1-14 0 5 5 0 0 1 1-3 1 1 0 0 0 5 0c0-2-1.5-3-1.5-5q0-2 2.5-4"/></symbol>
   <symbol id="i-star" viewBox="0 0 24 24"><path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/></symbol>
 </defs></svg>
@@ -704,16 +769,14 @@ body.is-detail main{padding-top:1.4rem}
     <div class="bar">
       <button id="chatBack" class="iconbtn" type="button" aria-label="Kembali ke beranda"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
       <h2>Chat Global</h2>
-      <span class="chip">Segera</span>
+      <span class="chip">Hangus 7 hari</span>
     </div>
-    <div class="gate-wrap"><div class="gate">
-      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-chat"/></svg></span></div>
-      <div class="gate-body center">
-        <h2>Coming soon</h2>
-        <p>Ruang ngobrol bareng semua member Node Tools lagi disiapin. Sementara itu, lanjut pakai tools dulu.</p>
-        <button id="chatTools" class="gate-btn" type="button"><span>Buka Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
-      </div>
-    </div></div>
+    <div id="chatPins" class="chat-pins" hidden></div>
+    <div id="chatList" class="chat-list" aria-live="polite"></div>
+    <form id="chatForm" class="chat-form" autocomplete="off">
+      <input id="chatInput" type="text" maxlength="300" placeholder="Tulis pesan..." aria-label="Tulis pesan">
+      <button class="iconbtn" type="submit" aria-label="Kirim pesan"><svg class="ic"><use href="#i-send"/></svg></button>
+    </form>
   </section>
 
   <section id="screen-detail" hidden>
@@ -1214,13 +1277,14 @@ body.is-detail main{padding-top:1.4rem}
     if (intro === 'splash' && !currentAuth) return showScreen('splash');
     if (intro === 'onboard') { paintOb(); return showScreen('onboard'); }
     if (!authResolved) return showScreen('checking');
-    if (!currentAuth) { stopCountdown(); statsLoaded = false; giftsAt = 0; return showScreen('login'); }
+    if (!currentAuth) { stopCountdown(); statsLoaded = false; giftsAt = 0; stopChat(); return showScreen('login'); }
     if (view === 'admin' && !currentAuth.isAdmin) view = 'home';
     if (view === 'detail' && !cur) view = 'tools';
     updateWaLinks();
     paintHome();
     if (view === 'detail') paintDetail(); else if (view === 'profile') paintProfile(); else if (view === 'admin') drawChart();
     showScreen(view);
+    if (view === 'chat') startChat(); else stopChat();
     startCountdown();
     load();
     loadStats(false);
@@ -1370,7 +1434,6 @@ body.is-detail main{padding-top:1.4rem}
   navTools.addEventListener('click', () => go('tools'));
   navChat.addEventListener('click', () => go('chat'));
   $('chatBack').addEventListener('click', () => go('home'));
-  $('chatTools').addEventListener('click', () => go('tools'));
   $('menuClose').addEventListener('click', closeMenu);
   // Tap member di list -> email langsung keisi, fokus lompat ke Durasi: admin tinggal ketik jam + Enter.
   function pickMember(email) {
@@ -1443,6 +1506,83 @@ body.is-detail main{padding-top:1.4rem}
     } finally {
       submitBtn.disabled = false;
     }
+  });
+
+  // ---------- Chat Global: bubble, pesan tersemat, kirim ----------
+  const chatList = $('chatList'), chatPins = $('chatPins'), chatForm = $('chatForm'), chatInput = $('chatInput');
+  let chatOff = null, chatStick = true, chatLast = 0;
+  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  // Waktu: hari ini "14.32", kemarin "Kemarin 14.32", lebih lama "28 Sep 14.32"
+  function chatTime(ts) {
+    if (!ts) return '';
+    const d = ts.toDate(), n = new Date(), hm = pad(d.getHours()) + '.' + pad(d.getMinutes());
+    const gap = Math.round((new Date(n.getFullYear(), n.getMonth(), n.getDate()) - new Date(d.getFullYear(), d.getMonth(), d.getDate())) / 864e5);
+    return gap === 0 ? hm : gap === 1 ? 'Kemarin ' + hm : d.getDate() + ' ' + MON[d.getMonth()] + ' ' + hm;
+  }
+  function pinBtn(m) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'msg-pinbtn' + (m.pinned ? ' on' : '');
+    b.dataset.id = m.id; b.dataset.on = m.pinned ? '1' : ''; b.dataset.ms = m.createdAt ? m.createdAt.toMillis() : Date.now();
+    b.setAttribute('aria-label', m.pinned ? 'Lepas sematan' : 'Sematkan pesan');
+    b.innerHTML = '<svg class="ic"><use href="#i-pin"/></svg>';
+    return b;
+  }
+  // Semua teks pakai textContent (bukan innerHTML) biar pesan orang lain gak bisa nyisipin HTML/script.
+  function bubble(m) {
+    const el = document.createElement('div'), meta = document.createElement('div'), mail = document.createElement('span'), time = document.createElement('span'), txt = document.createElement('div');
+    el.className = 'msg' + (currentAuth && m.email === currentAuth.email ? ' me' : '') + (window.ntIsAdminEmail(m.email) ? ' adm' : '');
+    meta.className = 'msg-meta'; mail.className = 'msg-mail'; time.className = 'msg-time'; txt.className = 'msg-text';
+    mail.textContent = m.email; time.textContent = chatTime(m.createdAt); txt.textContent = m.text;
+    meta.append(mail, time);
+    if (currentAuth && currentAuth.isAdmin) meta.append(pinBtn(m));
+    el.append(meta, txt);
+    return el;
+  }
+  function pinItem(m) {
+    const el = document.createElement('div'), body = document.createElement('div'), mail = document.createElement('b'), txt = document.createElement('span');
+    el.className = 'chat-pin'; mail.textContent = m.email; txt.textContent = m.text;
+    el.innerHTML = '<svg class="ic"><use href="#i-pin"/></svg>';
+    body.append(mail, txt); el.append(body);
+    if (currentAuth && currentAuth.isAdmin) el.append(pinBtn(m));
+    return el;
+  }
+  const toEnd = () => window.scrollTo(0, document.body.scrollHeight);
+  addEventListener('scroll', () => { if (view === 'chat') chatStick = innerHeight + scrollY >= document.body.scrollHeight - 160; }, { passive: true });
+  function paintFeed(rows) {
+    if (rows.length) chatList.replaceChildren(...rows.map(bubble));
+    else chatList.innerHTML = '<p class="state">Belum ada pesan. Jadi yang pertama nyapa!</p>';
+    if (chatStick) toEnd();
+  }
+  function paintPins(rows) {
+    chatPins.hidden = !rows.length;
+    chatPins.replaceChildren(...rows.map(pinItem));
+    if (chatStick) toEnd();
+  }
+  function startChat() {
+    if (chatOff || !window.ntChatListen) return;
+    chatStick = true;
+    chatOff = window.ntChatListen(paintFeed, paintPins, () => { chatList.innerHTML = '<p class="state error">Gagal muat chat. Cek koneksi atau aturan Firestore.</p>'; });
+  }
+  function stopChat() { if (chatOff) { chatOff(); chatOff = null; } }
+  const onPin = async (e) => {
+    const b = e.target.closest('.msg-pinbtn');
+    if (!b) return;
+    if (!b.dataset.on && chatPins.children.length >= 3) { alert('Maksimal 3 pesan tersemat. Lepas salah satu dulu.'); return; }
+    b.disabled = true;
+    try { await window.ntChatPin(b.dataset.id, !b.dataset.on, Number(b.dataset.ms)); }
+    catch (err) { alert((err && err.message) || 'Gagal sematkan pesan.'); }
+    finally { b.disabled = false; }
+  };
+  chatList.addEventListener('click', onPin);
+  chatPins.addEventListener('click', onPin);
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const t = chatInput.value.trim(), btn = chatForm.querySelector('button');
+    if (!t || Date.now() - chatLast < 2000) return; // jeda 2 detik biar gak spam
+    chatLast = Date.now(); btn.disabled = true;
+    try { await window.ntChatSend(t); chatInput.value = ''; window.scrollTo(0, document.body.scrollHeight); }
+    catch (err) { alert('Pesan gagal terkirim. Cek koneksi & jam HP kamu (harus akurat).'); }
+    finally { btn.disabled = false; chatInput.focus(); }
   });
 
   // Anti muter-terus: kalau Firebase/Firestore gagal atau gak respons, munculin layar error + coba lagi
