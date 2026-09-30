@@ -15,7 +15,7 @@
   NODE TOOLS — engine. Gak perlu diedit lagi buat nambah tool baru.
   Tambah tool: buat tools/<slug>.html (taruh <script src="../guard.js"></script> PALING ATAS <head>-nya), lalu isi data.json (name, description, thumbnail).
 
-  Field OPSIONAL di data.json (boleh gak diisi): category (warna ikon per kategori), tag ("Populer"/"Baru"), steps (maks 3 langkah cara pakai), input + output (format, mis. "SVG" dan "AM XML", tampil sebagai alur di kartu).
+  Field OPSIONAL di data.json (boleh gak diisi): category (warna ikon per kategori), tag ("Populer"/"Baru"), steps (maks 3 langkah cara pakai), input + output (format, mis. "SVG" dan "AM XML", tampil sebagai alur di kartu), updated (teks bebas, mis. "30 Sep 2026").
 
   UI/UX file ini udah dirombak total ngikutin wireframe Neo-Brutalism (bottom nav, menu drawer, list tools,
   stat card admin, dll) TAPI seluruh logika di bawah (Firebase, timer, streak, admin grant) PERSIS SAMA
@@ -174,9 +174,9 @@
     if (!user) throw new Error('Kamu belum login.');
     const ref = doc(db, 'users', user.uid);
     const [gs, us] = await Promise.all([getDoc(doc(db, 'gifts', gid)), getDoc(ref)]);
-    if (!gs.exists() || gs.data().expiresAt <= Date.now()) throw new Error('Hadiah ini sudah kedaluwarsa.');
+    if (!gs.exists() || gs.data().expiresAt <= Date.now()) throw new Error('Bonus ini sudah hangus (lewat batas mulai).');
     const u = us.data() || {};
-    if ((u.giftClaims || {})[gid]) throw new Error('Hadiah ini sudah kamu klaim.');
+    if ((u.giftClaims || {})[gid]) throw new Error('Bonus ini sudah kamu mulai.');
     const bonusUntil = Math.max(Number(u.bonusUntil || 0), Date.now()) + gs.data().hours * ONE_HOUR;
     await updateDoc(ref, { bonusUntil, ['giftClaims.' + gid]: true, lastGiftId: gid, updatedAt: serverTimestamp() });
   };
@@ -397,6 +397,7 @@ main{flex:1;padding-top:.6rem;padding-bottom:6rem}
 .gate-btn:hover:not(:disabled){transform:translate(-2px,-2px);box-shadow:7px 7px 0 var(--ink)}
 .gate-btn:active:not(:disabled){transform:translate(3px,3px);box-shadow:1px 1px 0 var(--ink)}
 .gate-btn:disabled{opacity:.55;cursor:progress}
+.gate-btn.locked{background:var(--card);box-shadow:3px 3px 0 var(--ink)}
 .gate-msg{margin-top:1rem;padding:.6rem .8rem;background:var(--red);border:2px solid var(--ink);font-weight:700;font-size:.82rem}
 .gate-msg::before{content:"! "}
 .gate-msg.ok{background:var(--green)}
@@ -531,6 +532,13 @@ body.is-detail main{padding-top:1.4rem}
 .dt-info b{font:900 .88rem var(--sans);overflow-wrap:anywhere}
 .menu-list a{display:flex;align-items:center;gap:.9rem;width:100%;padding:.85rem 1.2rem;border-bottom:2px solid var(--line);color:var(--ink);font:800 .9rem var(--sans);text-decoration:none}
 .menu-list a:hover{background:var(--paper)}
+
+/* Signature: corner-cut juga di CTA utama + kartu timer, label TOOL_xx, badge sedikit offset */
+.timer-card,.gate-btn{--c:14px;--s:7px;position:relative;clip-path:polygon(0 0,calc(100% - var(--c)) 0,100% var(--c),calc(100% + var(--s)) calc(var(--c) + var(--s)),calc(100% + var(--s)) calc(100% + var(--s)),0 calc(100% + var(--s)))}
+.timer-card::after,.gate-btn::after{content:"";position:absolute;top:-3px;right:-3px;width:var(--c);height:var(--c);pointer-events:none;background:linear-gradient(to bottom left,transparent calc(50% - 3px),var(--ink) 0 calc(50% + 3px),transparent 0)}
+.gate-btn:focus-visible{outline-offset:-8px}
+.idx{font:700 .6rem var(--mono);letter-spacing:.06em;color:#6b6a68}
+.tag{transform:translate(2px,-1px) rotate(-2deg)}
 
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -692,6 +700,22 @@ body.is-detail main{padding-top:1.4rem}
     <section id="grid" class="grid" aria-label="Tools"></section>
   </section>
 
+  <section id="screen-chat" hidden>
+    <div class="bar">
+      <button id="chatBack" class="iconbtn" type="button" aria-label="Kembali ke beranda"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
+      <h2>Chat Global</h2>
+      <span class="chip">Segera</span>
+    </div>
+    <div class="gate-wrap"><div class="gate">
+      <div class="gate-top"><span class="gate-icon" aria-hidden="true"><svg class="ic"><use href="#i-chat"/></svg></span></div>
+      <div class="gate-body center">
+        <h2>Coming soon</h2>
+        <p>Ruang ngobrol bareng semua member Node Tools lagi disiapin. Sementara itu, lanjut pakai tools dulu.</p>
+        <button id="chatTools" class="gate-btn" type="button"><span>Buka Semua Tools</span><svg class="ic"><use href="#i-arrow"/></svg></button>
+      </div>
+    </div></div>
+  </section>
+
   <section id="screen-detail" hidden>
     <div class="bar">
       <button id="dtBack" class="iconbtn" type="button" aria-label="Kembali ke daftar tools"><svg class="ic" style="transform:scaleX(-1)"><use href="#i-arrow"/></svg></button>
@@ -704,6 +728,7 @@ body.is-detail main{padding-top:1.4rem}
       <div><small>Format input</small><b id="dtIn"></b></div>
       <div><small>Format output</small><b id="dtOut"></b></div>
       <div><small>Kategori</small><b id="dtCat"></b></div>
+      <div><small>Terakhir diperbarui</small><b id="dtUpd"></b></div>
       <div><small>Akses</small><b id="dtAccV">Sisa <span class="js-remain">0:00</span></b><b id="dtAdm" hidden>Admin</b></div>
     </div>
     <h3 class="pf-h">Cara pakai</h3>
@@ -756,6 +781,7 @@ body.is-detail main{padding-top:1.4rem}
 <nav id="bottomNav" class="bottomnav" hidden>
   <button id="navHome" type="button"><svg class="ic"><use href="#i-home"/></svg><span>Beranda</span></button>
   <button id="navTools" type="button"><svg class="ic"><use href="#i-tools"/></svg><span>Tools</span></button>
+  <button id="navChat" type="button" aria-label="Chat Global"><svg class="ic"><use href="#i-chat"/></svg><span>Chat</span></button>
   <button id="navProfile" type="button"><svg class="ic"><use href="#i-user"/></svg><span>Profil</span></button>
 </nav>
 
@@ -861,7 +887,7 @@ body.is-detail main{padding-top:1.4rem}
     card.setAttribute('role', 'button');
     card.setAttribute('aria-label', 'Lihat detail: ' + t.name);
     const body = el('div', 'body');
-    body.append(el('h2', null, t.name));
+    body.append(el('span', 'idx', 'TOOL_' + pad(t.i + 1)), el('h2', null, t.name));
     if (t.desc) body.append(el('p', null, t.desc));
     const meta = t.io.length ? t.io[0] + ' → ' + t.io[1] : t.catL;
     if (meta) body.append(el('p', 'meta', meta));
@@ -908,7 +934,7 @@ body.is-detail main{padding-top:1.4rem}
         if (!slug) return [];
         const desc = String(t?.description ?? '').trim();
         const catL = String(t?.category ?? '').trim(), cat = catL.toLowerCase();
-        const inp = String(t?.input ?? '').trim(), out = String(t?.output ?? '').trim(), io = inp && out ? [inp, out] : [];
+        const inp = String(t?.input ?? '').trim(), out = String(t?.output ?? '').trim(), io = inp && out ? [inp, out] : [], upd = String(t?.updated ?? '').trim();
         const tg = String(t?.tag ?? '').trim().toLowerCase();
         const tag = tg === 'populer' ? 'Populer' : tg === 'baru' ? 'Baru' : '';
         const fresh = N > 3 && i >= N - 3;
@@ -918,7 +944,7 @@ body.is-detail main{padding-top:1.4rem}
           href: 'tools/' + encodeURIComponent(slug) + '.html',
           hay: norm(name + ' ' + desc + ' ' + catL + ' ' + io.join(' ')),
           c: COLORS[(cat ? (cats.includes(cat) ? cats.indexOf(cat) : cats.push(cat) - 1) : i) % COLORS.length],
-          fresh, cat, catL, io, label: tag || (fresh ? 'Baru' : ''),
+          fresh, cat, catL, io, upd, label: tag || (fresh ? 'Baru' : ''),
           steps: Array.isArray(t?.steps) ? t.steps.slice(0, 3).map(x => String(x)) : []
         };
         o.node = buildCard(o);
@@ -964,9 +990,9 @@ body.is-detail main{padding-top:1.4rem}
 
   // ---------- Akses: login Google wajib + jatah 1 jam/hari (Firestore) + admin bisa nambah 1-24 jam ----------
   const $ = id => document.getElementById(id);
-  const screens = { checking: $('screen-checking'), login: $('screen-login'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools'), splash: $('screen-splash'), onboard: $('screen-onboard'), detail: $('screen-detail'), profile: $('screen-profile'), admin: $('screen-admin') };
+  const screens = { checking: $('screen-checking'), login: $('screen-login'), error: $('screen-error'), home: $('screen-home'), tools: $('screen-tools'), splash: $('screen-splash'), onboard: $('screen-onboard'), detail: $('screen-detail'), profile: $('screen-profile'), admin: $('screen-admin'), chat: $('screen-chat') };
   const menuWrap = $('menuWrap'), menuBtn = $('menuBtn'), menu = $('menu');
-  const bottomNav = $('bottomNav'), navHome = $('navHome'), navTools = $('navTools'), navProfile = $('navProfile');
+  const bottomNav = $('bottomNav'), navHome = $('navHome'), navTools = $('navTools'), navChat = $('navChat'), navProfile = $('navProfile');
   const adminPanel = $('adminPanel'), adminForm = $('adminForm'), adminMsg = $('adminMsg');
   const adminEmailInput = $('adminEmail'), adminHoursInput = $('adminHours');
   const themeColorMeta = $('themeColorMeta');
@@ -982,7 +1008,7 @@ body.is-detail main{padding-top:1.4rem}
   function toggleMenu(e) { if (e) e.stopPropagation(); menu.hidden = !menu.hidden; menuBtn.setAttribute('aria-expanded', String(!menu.hidden)); }
   function showScreen(name) {
     for (const key in screens) screens[key].hidden = key !== name;
-    const chromeOn = ['home', 'tools', 'detail', 'profile', 'admin'].includes(name);
+    const chromeOn = ['home', 'tools', 'detail', 'profile', 'admin', 'chat'].includes(name);
     document.body.classList.toggle('no-top', name === 'splash' || name === 'onboard' || name === 'detail');
     document.body.classList.toggle('is-detail', name === 'detail');
     menuWrap.hidden = !chromeOn;
@@ -990,6 +1016,7 @@ body.is-detail main{padding-top:1.4rem}
     navHome.classList.toggle('active', name === 'home' || name === 'admin');
     navTools.classList.toggle('active', name === 'tools' || name === 'detail');
     navProfile.classList.toggle('active', name === 'profile');
+    navChat.classList.toggle('active', name === 'chat');
     closeMenu();
   }
   function go(v) { view = v; window.scrollTo(0, 0); render(); }
@@ -999,6 +1026,18 @@ body.is-detail main{padding-top:1.4rem}
   function fmt(ms) {
     const t = Math.floor(ms / 1000), h = Math.floor(t / 3600), m = Math.floor(t % 3600 / 60);
     return (h ? h + ':' + pad(m) : m) + ':' + pad(t % 60);
+  }
+
+  // Gerbang akses: admin selalu lolos; member cuma lolos kalau timer gratis/bonus MASIH nyala di jam sekarang.
+  function hasAccess() { return !!currentAuth && (currentAuth.isAdmin || Math.max(currentAuth.freeUntil, currentAuth.bonusUntil) > Date.now()); }
+  function paintGo() {
+    const a = $('dtGo');
+    if (!a || !currentAuth || !cur) return;
+    const ok = hasAccess();
+    a.href = ok ? cur.href : '#';
+    a.classList.toggle('locked', !ok);
+    a.setAttribute('aria-disabled', String(!ok));
+    a.querySelector('span').textContent = ok ? 'Pakai Sekarang' : (currentAuth.claimedToday ? 'Waktu Habis' : 'Mulai Timer Dulu');
   }
 
   function startCountdown() {
@@ -1017,6 +1056,7 @@ body.is-detail main{padding-top:1.4rem}
       bonusNodes.forEach(n => { n.textContent = fmt(Math.max(0, bonusRemain)); });
       if (!currentAuth.isAdmin) {
         paintFreeHint(freeRemain);
+        paintGo();
         const al = $('accLabel');
         if (al) al.textContent = totalRemain > 0 ? 'AKSES AKTIF' : currentAuth.claimedToday ? 'AKSES HABIS' : 'BELUM MULAI';
         // Abis: cukup stop interval-nya di sini. Home udah nampilin state "abis" secara inline,
@@ -1105,13 +1145,13 @@ body.is-detail main{padding-top:1.4rem}
     window.ntListGifts().then(list => {
       $('giftBox').replaceChildren(...list.map(g => {
         const row = el('div', 'gift'), t = el('div', 'gift-t', '+' + g.hours + ' jam' + (g.desc ? ': ' + g.desc : ''));
-        t.append(el('small', null, 'Klaim sebelum ' + new Date(g.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })));
-        const b = el('button', null, 'Klaim');
+        t.append(el('small', null, 'Timer jalan pas kamu tekan Mulai. Hangus setelah ' + new Date(g.expiresAt).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })));
+        const b = el('button', null, 'Mulai');
         b.type = 'button';
         b.addEventListener('click', async () => {
           b.disabled = true; $('giftMsg').hidden = true;
           try { await window.ntClaimGift(g.id); loadGifts(true); }
-          catch (err) { $('giftMsg').textContent = (err && err.message) || 'Gagal klaim hadiah.'; $('giftMsg').hidden = false; b.disabled = false; }
+          catch (err) { $('giftMsg').textContent = (err && err.message) || 'Gagal mulai timer bonus.'; $('giftMsg').hidden = false; b.disabled = false; }
         });
         row.append(svgUse('i-plus', 'ic'), t, b);
         return row;
@@ -1214,10 +1254,11 @@ body.is-detail main{padding-top:1.4rem}
     tg.hidden = !t.label;
     tg.textContent = t.label;
     tg.className = 'tag' + (t.label === 'Baru' ? ' new' : '');
-    $('dtGo').href = t.href;
+    paintGo();
     $('dtIn').textContent = t.io[0] || ''; $('dtOut').textContent = t.io[1] || '';
     $('dtIn').parentNode.hidden = $('dtOut').parentNode.hidden = !t.io.length;
     $('dtCat').textContent = t.catL; $('dtCat').parentNode.hidden = !t.catL;
+    $('dtUpd').textContent = t.upd; $('dtUpd').parentNode.hidden = !t.upd;
     $('dtAccV').hidden = currentAuth.isAdmin; $('dtAdm').hidden = !currentAuth.isAdmin;
     paintFav(t);
     const st = t.steps.length ? t.steps : ['Buka tool lewat tombol di bawah.', 'Masukkan atau tempel kontenmu.', 'Salin atau unduh hasilnya.'];
@@ -1327,6 +1368,9 @@ body.is-detail main{padding-top:1.4rem}
   navProfile.addEventListener('click', () => go('profile'));
   navHome.addEventListener('click', () => go('home'));
   navTools.addEventListener('click', () => go('tools'));
+  navChat.addEventListener('click', () => go('chat'));
+  $('chatBack').addEventListener('click', () => go('home'));
+  $('chatTools').addEventListener('click', () => go('tools'));
   $('menuClose').addEventListener('click', closeMenu);
   // Tap member di list -> email langsung keisi, fokus lompat ke Durasi: admin tinggal ketik jam + Enter.
   function pickMember(email) {
@@ -1353,12 +1397,16 @@ body.is-detail main{padding-top:1.4rem}
   $('dAdd').addEventListener('click', openAdmin);
   $('dtBack').addEventListener('click', () => go('tools'));
   $('dtFav').addEventListener('click', () => cur && setFav(cur));
-  $('dtGo').addEventListener('click', () => cur && addHist(cur.name));
+  $('dtGo').addEventListener('click', (e) => {
+    if (!hasAccess()) { e.preventDefault(); go('home'); return; } // belum mulai / waktu habis -> balik ke beranda (tombol Mulai Timer)
+    cur && addHist(cur.name);
+  });
   $('pfOut').addEventListener('click', signOutNow);
   $('pfClear').addEventListener('click', () => { store.set('nt_hist', []); paintProfile(); });
   const showGuide = () => { guide = true; obIdx = 0; intro = 'onboard'; render(); };
   $('pfGuide').addEventListener('click', showGuide);
   $('menuGuide').addEventListener('click', showGuide);
+  $('menuHelp').addEventListener('click', closeMenu);
   $('obNext').addEventListener('click', () => { if (obIdx < SLIDES.length - 1) { obIdx++; paintOb(); } else endIntro(); });
   $('obSkip').addEventListener('click', endIntro);
   $('screen-splash').addEventListener('click', afterSplash);
@@ -1378,7 +1426,7 @@ body.is-detail main{padding-top:1.4rem}
       let okText;
       if (adminAll) {
         const until = await window.ntAdminGift(adminHoursInput.value, $('giftDesc').value, $('giftDays').value);
-        okText = 'Berhasil — ' + adminHoursInput.value + ' jam dibagikan ke semua member. Bisa diklaim sampai ' + new Date(until).toLocaleString('id-ID') + '.';
+        okText = 'Berhasil — ' + adminHoursInput.value + ' jam dibagikan ke semua member. Member mulai sendiri, hangus setelah ' + new Date(until).toLocaleString('id-ID') + '.';
       } else {
         const newUntil = await window.ntAdminGrant(adminEmailInput.value, adminHoursInput.value);
         okText = 'Berhasil — timer tambahan aktif sampai ' + new Date(newUntil).toLocaleString('id-ID') + '.';
