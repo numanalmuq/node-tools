@@ -1,7 +1,6 @@
 <!doctype html>
 <html lang="id">
 <head>
-<script src="../guard.js"></script>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
 <title>Jalur — SVG ke Alight Motion</title>
@@ -9,6 +8,13 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+<!-- OCR untuk fitur "deteksi teks -> text layer" (lihat STAGE 3 & AMEngine.extractShapes).
+     Pinned ke major v5 dengan sengaja: v6 mematikan output blocks/lines/words secara default
+     (cuma teks polos), dan itu justru field (bbox + confidence per baris) yang paling
+     dibutuhkan fitur ini. Satu-satunya bagian Jalur yang perlu koneksi internet saat dipakai;
+     kalau CDN ini diblokir/offline, recognizeImageText() gagal dengan aman dan gambar tetap
+     diproses seperti biasa (trace vektor penuh, tanpa text layer). -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <style>
   /* ============ Design tokens — Neo-Brutalism ============ */
   :root{
@@ -274,6 +280,7 @@
 
   /* ============ Preview ============ */
   .preview-box{
+    position:relative;
     border-radius:var(--radius-sm);
     border:var(--border-w) solid var(--ink);
     background-image:
@@ -292,6 +299,85 @@
   }
   .preview-box svg{ max-width:100%; max-height:14rem; width:auto; height:auto; }
   .preview-empty{ color:var(--ink-soft); font-weight:600; font-size:0.8125rem; text-align:center; }
+
+  /* Small "before" inset showing the original raster upload in a corner of the real,
+     traced-shapes preview, so a raw photo never gets mistaken for the traced result itself. */
+  .preview-original-badge{
+    position:absolute;
+    right:0.625rem; bottom:0.625rem;
+    width:3.25rem; height:3.25rem;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-sm);
+    overflow:hidden;
+    background:var(--paper);
+    box-shadow:var(--shadow-sm);
+  }
+  .preview-original-badge img{ display:block; width:100%; height:100%; object-fit:cover; }
+  .preview-original-badge::after{
+    content:"Asli";
+    position:absolute; left:0; right:0; bottom:0;
+    padding:0.0625rem 0;
+    background:rgba(11,11,12,0.72);
+    color:#fff;
+    font-family:var(--font-mono);
+    font-size:0.5rem;
+    font-weight:700;
+    letter-spacing:0.02em;
+    text-transform:uppercase;
+    text-align:center;
+  }
+
+  /* Keeps the live SVG attached to the document (so getComputedStyle resolves correctly
+     while extracting shapes) without ever showing it — the preview box shows the real,
+     traced/extracted result instead, never the raw source. */
+  .offscreen-render{ position:absolute; left:-99999px; top:-99999px; width:1px; height:1px; overflow:hidden; }
+
+  /* ============ Before/after compare slider ============ */
+  .compare-panel{ display:none; margin-top:0.75rem; }
+  .compare-panel.open{ display:block; }
+  .compare-box{
+    position:relative;
+    aspect-ratio:1;
+    border-radius:var(--radius-sm);
+    border:var(--border-w) solid var(--ink);
+    overflow:hidden;
+    background-image:
+      linear-gradient(45deg, #E3E7EC 25%, transparent 25%),
+      linear-gradient(-45deg, #E3E7EC 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #E3E7EC 75%),
+      linear-gradient(-45deg, transparent 75%, #E3E7EC 75%);
+    background-size:16px 16px;
+    background-position:0 0, 0 8px, 8px -8px, -8px 0px;
+    background-color:#fafbfc;
+    touch-action:none;
+    cursor:ew-resize;
+    box-shadow:var(--shadow-sm);
+  }
+  .compare-layer{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:7%; }
+  .compare-layer img{ width:100%; height:100%; object-fit:contain; }
+  .compare-after{ clip-path:inset(0 50% 0 0); }
+  .compare-divider{ position:absolute; top:0; bottom:0; left:50%; width:0; pointer-events:none; }
+  .compare-divider::before{
+    content:""; position:absolute; top:0; bottom:0; left:0; width:var(--border-w);
+    background:var(--ink); transform:translateX(-50%);
+  }
+  .compare-handle{
+    position:absolute; top:50%; left:0; transform:translate(-50%, -50%);
+    width:2.25rem; height:2.25rem; border-radius:var(--radius-pill);
+    background:var(--blue); border:2px solid var(--ink);
+    display:flex; align-items:center; justify-content:center; color:#fff;
+    box-shadow:var(--shadow-sm);
+  }
+  .compare-handle svg{ width:16px; height:16px; }
+  .compare-tag{
+    position:absolute; top:0.5rem;
+    font-family:var(--font-mono); font-size:0.625rem; font-weight:700;
+    padding:0.1875rem 0.5rem; border-radius:var(--radius-pill);
+    background:var(--ink); color:#fff;
+    text-transform:uppercase; letter-spacing:0.02em; pointer-events:none;
+  }
+  .compare-tag-left{ left:0.5rem; }
+  .compare-tag-right{ right:0.5rem; }
 
   .meta-line{
     display:flex; align-items:center; gap:0.5rem;
@@ -548,6 +634,72 @@
     margin:0;
   }
 
+  /* ============ Smart Shape Reconstruction: sliders ============ */
+  .slider-row{ margin-bottom:var(--gap-md); }
+  .slider-row:last-child{ margin-bottom:0; }
+  .slider-head{ display:flex; align-items:baseline; justify-content:space-between; gap:0.5rem; margin-bottom:0.4375rem; }
+  .slider-head .slider-label{
+    font-family:var(--font-display); font-weight:700; font-size:0.8125rem;
+    text-transform:uppercase; letter-spacing:0.03em;
+  }
+  .slider-value{
+    font-family:var(--font-mono); font-weight:700; font-size:0.75rem;
+    background:var(--ink); color:var(--paper);
+    padding:0.0625rem 0.4375rem; border-radius:4px;
+    min-width:2.5rem; text-align:center; flex:none;
+  }
+  input[type="range"].brut-range{
+    -webkit-appearance:none; appearance:none;
+    display:block; width:100%; height:1.625rem; background:transparent; margin:0; cursor:pointer;
+  }
+  input[type="range"].brut-range::-webkit-slider-runnable-track{
+    height:0.75rem; border-radius:var(--radius-sm); border:2px solid var(--ink);
+    background:linear-gradient(to right, var(--blue) 0%, var(--blue) var(--pct,50%), var(--paper) var(--pct,50%), var(--paper) 100%);
+  }
+  input[type="range"].brut-range::-moz-range-track{
+    height:0.75rem; border-radius:var(--radius-sm); border:2px solid var(--ink); background:var(--paper);
+  }
+  input[type="range"].brut-range::-moz-range-progress{
+    height:0.75rem; border-radius:var(--radius-sm) 0 0 var(--radius-sm); background:var(--blue);
+  }
+  input[type="range"].brut-range::-webkit-slider-thumb{
+    -webkit-appearance:none; appearance:none;
+    width:1.375rem; height:1.375rem; margin-top:-0.375rem;
+    border-radius:6px; background:var(--ink); border:2px solid var(--ink);
+    box-shadow:2px 2px 0 var(--ink); transition:transform 120ms;
+  }
+  input[type="range"].brut-range::-moz-range-thumb{
+    width:1.375rem; height:1.375rem;
+    border-radius:6px; background:var(--ink); border:2px solid var(--ink);
+    box-shadow:2px 2px 0 var(--ink); transition:transform 120ms;
+  }
+  input[type="range"].brut-range:active::-webkit-slider-thumb{ transform:scale(1.1); }
+  input[type="range"].brut-range:active::-moz-range-thumb{ transform:scale(1.1); }
+  input[type="range"].brut-range:focus-visible{ outline:none; }
+  input[type="range"].brut-range:focus-visible::-webkit-slider-thumb{ outline:2px solid var(--blue); outline-offset:2px; }
+  input[type="range"].brut-range:focus-visible::-moz-range-thumb{ outline:2px solid var(--blue); outline-offset:2px; }
+  @media (prefers-reduced-motion: reduce){
+    input[type="range"].brut-range::-webkit-slider-thumb, input[type="range"].brut-range::-moz-range-thumb{ transition:none; }
+  }
+
+  /* ============ Smart Shape Reconstruction: process preview ============ */
+  .recon-panel{ display:none; margin-top:0.75rem; }
+  .recon-panel.open{ display:block; }
+  .recon-legend{
+    display:flex; flex-wrap:wrap; gap:0.625rem 0.875rem;
+    margin-top:0.75rem; font-size:0.75rem; font-weight:600; color:var(--ink-soft);
+  }
+  .recon-legend span{ display:inline-flex; align-items:center; gap:0.3125rem; }
+  .recon-legend i{ width:9px; height:9px; border-radius:2px; flex:none; }
+  .recon-kind-breakdown{ font-size:0.8125rem; color:var(--ink-soft); font-weight:600; margin-top:0.375rem; }
+
+  /* ============ Smart Shape Reconstruction: mode-conditional settings block ============ */
+  .recon-fields{ display:none; }
+  .recon-fields.show{
+    display:block; margin-top:var(--gap-md); padding-top:var(--gap-md);
+    border-top:var(--border-w) dashed var(--ink);
+  }
+
   @media (min-width:560px){
     :root{ --pad:2rem; }
     .btn-row .btn{ flex:none; padding-left:1.75rem; padding-right:1.75rem; }
@@ -604,6 +756,10 @@
         </button>
       </span>
 
+      <button type="button" class="paste-toggle" id="sampleBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        Coba dengan contoh rumit
+      </button>
       <button type="button" class="paste-toggle" id="pasteToggle" aria-expanded="false">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 12h6M9 16h6M9 8h2M7 4h10a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
         Tempel kode SVG sebagai gantinya
@@ -630,8 +786,61 @@
       </div>
       <div class="meta-line" id="metaLine" style="display:none;">
         <strong id="shapeCount">0</strong><span>bentuk terdeteksi</span>
+        <span>·</span>
+        <strong id="sizeEstimate">—</strong><span>perkiraan ukuran XML</span>
       </div>
       <ul class="warn-list" id="warnList" style="display:none;"></ul>
+
+      <button type="button" class="paste-toggle" id="compareToggle" aria-expanded="false">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M8 4v16M16 4v16" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M4 9l-2 3 2 3M20 9l2 3-2 3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Bandingkan dengan asli
+      </button>
+      <div class="compare-panel" id="comparePanel">
+        <div class="compare-box" id="compareBox" tabindex="0" aria-label="Geser untuk membandingkan SVG asli dan hasil parsing">
+          <div class="compare-layer compare-before" id="compareBefore"></div>
+          <div class="compare-layer compare-after" id="compareAfter"></div>
+          <div class="compare-divider" id="compareDivider">
+            <div class="compare-handle">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 7l-4 5 4 5"/><path d="M16 7l4 5-4 5"/></svg>
+            </div>
+          </div>
+          <span class="compare-tag compare-tag-left">Asli</span>
+          <span class="compare-tag compare-tag-right">Hasil</span>
+        </div>
+      </div>
+
+      <button type="button" class="paste-toggle" id="reconViewToggle" aria-expanded="false" style="display:none;">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="12" cy="12" r="2.5" stroke="currentColor" stroke-width="1.6"/></svg>
+        Lihat proses rekonstruksi
+      </button>
+      <div class="recon-panel" id="reconViewPanel">
+        <div class="chips" id="reconViewChips">
+          <button type="button" class="chip" data-view="original" aria-pressed="true">Asli</button>
+          <button type="button" class="chip" data-view="detected" aria-pressed="false">Bentuk Terdeteksi</button>
+          <button type="button" class="chip" data-view="clean" aria-pressed="false">SVG Bersih</button>
+        </div>
+        <div class="preview-box" id="reconViewBox" style="margin-top:0.625rem;">
+          <div class="preview-empty">Belum ada pratinjau</div>
+        </div>
+        <div class="meta-line" id="reconStatsLine" style="display:none;">
+          <strong id="reconShapeCount">0</strong><span>bentuk</span>
+          <span>·</span>
+          <strong id="reconNativeCount">0</strong><span>native</span>
+          <span>·</span>
+          <strong id="reconPathCount">0</strong><span>path</span>
+          <span>·</span>
+          <strong id="reconAnchorCount">0</strong><span>anchor</span>
+        </div>
+        <div class="recon-kind-breakdown" id="reconKindBreakdown"></div>
+        <div class="recon-legend" id="reconLegend" style="display:none;">
+          <span><i style="background:#2B4EFF"></i>Lingkaran/elips</span>
+          <span><i style="background:#CC2318"></i>Kotak</span>
+          <span><i style="background:#E08A00"></i>Kotak membulat</span>
+          <span><i style="background:#007A45"></i>Garis</span>
+          <span><i style="background:#7A3CFF"></i>Border/stroke</span>
+          <span><i style="background:#0B0B0C"></i>Path bersih</span>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -702,6 +911,70 @@
           </div>
         </div>
 
+        <div class="field" id="modeField" style="display:none;">
+          <span class="field-label">Mode konversi gambar</span>
+          <div class="chips" id="modeChips">
+            <button type="button" class="chip" data-mode="trace" aria-pressed="true">Image Tracing</button>
+            <button type="button" class="chip" data-mode="reconstruct">Smart Shape Reconstruction</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Detail bentuk</span>
+          <div class="chips" id="detailChips">
+            <button type="button" class="chip" data-detail="ringan">Ringan</button>
+            <button type="button" class="chip" data-detail="sedang">Sedang</button>
+            <button type="button" class="chip" data-detail="berat" aria-pressed="true">Berat</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">Bentuk primitif AM</span>
+          <div class="chips" id="nativeShapeChips">
+            <button type="button" class="chip" data-nativeshape="on" aria-pressed="true">Otomatis (kotak, bulat, garis)</button>
+            <button type="button" class="chip" data-nativeshape="off">Selalu path</button>
+          </div>
+        </div>
+
+        <div class="recon-fields" id="reconFields">
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Detail / Simplification</span><span class="slider-value" id="reconDetailVal">45</span></div>
+            <input type="range" class="brut-range" id="reconDetail" min="0" max="100" value="45" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Shape Detection Strength</span><span class="slider-value" id="reconShapeVal">60</span></div>
+            <input type="range" class="brut-range" id="reconShape" min="0" max="100" value="60" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Corner Detection</span><span class="slider-value" id="reconCornerVal">50</span></div>
+            <input type="range" class="brut-range" id="reconCorner" min="0" max="100" value="50" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Curve Smoothing</span><span class="slider-value" id="reconSmoothVal">55</span></div>
+            <input type="range" class="brut-range" id="reconSmooth" min="0" max="100" value="55" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Noise Removal</span><span class="slider-value" id="reconNoiseVal">50</span></div>
+            <input type="range" class="brut-range" id="reconNoise" min="0" max="100" value="50" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Stroke Detection</span><span class="slider-value" id="reconStrokeVal">60</span></div>
+            <input type="range" class="brut-range" id="reconStroke" min="0" max="100" value="60" step="1">
+          </div>
+          <div class="slider-row">
+            <div class="slider-head"><span class="slider-label">Color Simplification</span><span class="slider-value" id="reconColorsVal">50</span></div>
+            <input type="range" class="brut-range" id="reconColors" min="0" max="100" value="50" step="1">
+          </div>
+        </div>
+
+        <div class="field" id="textDetectField">
+          <span class="field-label">Deteksi teks pada gambar (OCR)</span>
+          <div class="chips" id="textDetectChips">
+            <button type="button" class="chip" data-textdetect="on" aria-pressed="true">Otomatis jadi text layer</button>
+            <button type="button" class="chip" data-textdetect="off">Nonaktif</button>
+          </div>
+        </div>
+
       </div>
     </div>
   </section>
@@ -748,6 +1021,12 @@
 </footer>
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<!-- The live SVG being extracted lives here, never in previewBox: previewBox only ever shows
+     the real, traced/extracted result (see renderPreview), so what's on screen always matches
+     what gets exported. This host keeps the SVG attached to the document (getComputedStyle
+     needs that to resolve correctly) while staying fully off-screen. -->
+<div id="svgHost" class="offscreen-render" aria-hidden="true"></div>
 
 <script>
 
@@ -1450,6 +1729,79 @@ const AMEngine = (() => {
     return simplified.length >= 3 ? simplified : points;
   }
 
+  // ---- Anti-seam outward offset (post rasterize -> trace -> simplify) ----
+  // Every "rasterize a shape, trace its mask, then Douglas-Peucker-simplify the contour" path
+  // in this file (quantizeAndTrace's color regions, clip intersection, stroke-to-fill, SVG
+  // <mask> resolution) has the same two side effects:
+  //   1. A straight chord between two kept simplify vertices can only cut INTO a convex bump,
+  //      never bulge past it - so a rounded silhouette traced this way always comes out a hair
+  //      smaller than the pixels it was traced from, instead of fully covering them.
+  //   2. When two neighboring regions are traced as SEPARATE masks (e.g. two different palette
+  //      colors quantized from the same source image), each contour is simplified independently,
+  //      with its own rotation/start point - so the "same" shared physical edge can keep
+  //      slightly different vertices on each side. The two shapes then no longer meet exactly,
+  //      and whatever sits behind them (canvas background, or nothing) shows through the sliver.
+  // Both read, once imported into Alight Motion, as "the picture doesn't fully close - there's a
+  // gap". The fix used everywhere below is the same: after simplifying, nudge every contour
+  // outward by a small fixed amount. A silhouette eaten into by (1) gets restored (and
+  // overshoots slightly, which is invisible at that scale); two regions that used to just touch
+  // now genuinely overlap by a couple of source pixels, so whichever one paints on top simply
+  // covers the seam instead of exposing it. SEAM_OVERLAP_PX is expressed in each caller's own
+  // rasterize-analysis pixel space (some hundreds to ~2000px across), comfortably bigger than
+  // the ~1-1.1px simplify tolerances used alongside it, and ends up sub-pixel to a couple of
+  // final pixels once scaled back down to wherever the shape actually lands in the exported
+  // project - reliable at hiding seams, invisible as silhouette growth.
+  const SEAM_OVERLAP_PX = 1.25;
+
+  // Picks the outer-boundary winding of a shape's whole contour SET, not each contour on its
+  // own: the largest-area loop is taken as the reference, so a hole traced with the opposite
+  // winding (a donut/ring-shaped region, a letter with a counter) offsets in the direction that
+  // grows the shape's own visible fill - shrinking the hole to meet whatever sits inside it -
+  // rather than growing the hole itself, which is what offsetting every contour by its own
+  // independent winding would do.
+  function referenceWindingSign(contours) {
+    let bestAbs = -1, bestSign = 1;
+    for (const c of contours) {
+      if (c.length < 3) continue;
+      const area = polygonArea(c);
+      if (Math.abs(area) > bestAbs) { bestAbs = Math.abs(area); bestSign = area > 0 ? -1 : 1; }
+    }
+    return bestSign;
+  }
+
+  // Pushes every vertex of a simple closed polygon outward by `delta`, using a miter-style
+  // averaged edge-normal (the same construction a "stroke this outline" routine would use).
+  // Pass `refSign` (from referenceWindingSign) when offsetting several contours that belong to
+  // the same shape; omitted, it falls back to the polygon's own winding.
+  function offsetClosedPolygon(points, delta, refSign) {
+    const n = points.length;
+    if (n < 3 || !delta) return points;
+    const sign = Number.isFinite(refSign) ? refSign : (polygonArea(points) > 0 ? -1 : 1);
+    const out = new Array(n);
+    for (let i = 0; i < n; i++) {
+      const prev = points[(i - 1 + n) % n];
+      const cur = points[i];
+      const next = points[(i + 1) % n];
+      let e1x = cur.x - prev.x, e1y = cur.y - prev.y;
+      let e2x = next.x - cur.x, e2y = next.y - cur.y;
+      const l1 = Math.hypot(e1x, e1y) || 1;
+      const l2 = Math.hypot(e2x, e2y) || 1;
+      e1x /= l1; e1y /= l1; e2x /= l2; e2y /= l2;
+      const n1x = -e1y * sign, n1y = e1x * sign;
+      const n2x = -e2y * sign, n2y = e2x * sign;
+      let nx = n1x + n2x, ny = n1y + n2y;
+      const nl = Math.hypot(nx, ny);
+      if (nl < 1e-6) { nx = n1x; ny = n1y; } else { nx /= nl; ny /= nl; }
+      // Miter-length correction so the offset stays ~delta perpendicular to each edge even at a
+      // sharp corner, capped so a near-reversal spike doesn't shoot out too far.
+      const dot = Math.max(-1, Math.min(1, e1x * e2x + e1y * e2y));
+      const cosHalf = Math.sqrt(Math.max(0, (1 + dot) / 2)) || 1;
+      const miter = Math.min(3, 1 / Math.max(cosHalf, 0.34));
+      out[i] = { x: cur.x + nx * delta * miter, y: cur.y + ny * delta * miter };
+    }
+    return out;
+  }
+
   /* ===================== Clip-path resolution ===================== */
 
   function subpathsBBox(subpathsList) {
@@ -1625,8 +1977,10 @@ const AMEngine = (() => {
 
     const contours = traceMaskContours(binMask, cw, ch);
     const tol = 1.1;
-    return contours
-      .map((c) => simplifyClosedPolygon(c, tol))
+    const simplifiedContours = contours.map((c) => simplifyClosedPolygon(c, tol));
+    const ringSign = referenceWindingSign(simplifiedContours);
+    return simplifiedContours
+      .map((c) => offsetClosedPolygon(c, SEAM_OVERLAP_PX, ringSign))
       .filter((c) => c.length >= 3)
       .map((c) => {
         const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x / scale + minX, y: p.y / scale + minY }));
@@ -1756,10 +2110,19 @@ const AMEngine = (() => {
   // subpaths (pixel coordinates; caller maps to the target's actual placement/size).
   function quantizeAndTrace(imgData, maxColors) {
     const { cw, ch, data } = imgData;
-    const OPAQUE_THRESHOLD = 160; // stricter than a bare "visible" cutoff, to keep semi-transparent anti-aliased edge pixels out of the palette analysis
+    // BUG FIX: this used to be 160 ("stricter than a bare visible cutoff, to keep semi-
+    // transparent anti-aliased edge pixels out of the palette analysis"). That also excluded
+    // any UNIFORMLY translucent content - a soft glow, a low-opacity watermark, a feathered
+    // shape - from ever getting a palette color, so it could vanish from the traced result
+    // completely (not just look faint). Kept in sync with the >8 cutoff used below when
+    // building each color's own mask: a real anti-aliased edge is a thin minority of pixels
+    // around a shape and gets naturally outweighed by that shape's own (far more numerous)
+    // interior pixels during median-cut quantization, so this floor only needs to exclude
+    // near-fully-transparent background, not anything genuinely translucent.
+    const PALETTE_ALPHA_MIN = 8;
     const samples = [];
     for (let i = 0; i < cw * ch; i++) {
-      if (data.data[i * 4 + 3] > OPAQUE_THRESHOLD) samples.push([data.data[i * 4], data.data[i * 4 + 1], data.data[i * 4 + 2]]);
+      if (data.data[i * 4 + 3] > PALETTE_ALPHA_MIN) samples.push([data.data[i * 4], data.data[i * 4 + 1], data.data[i * 4 + 2]]);
     }
     if (!samples.length) return [];
     const analysis = samples.length > 5000 ? samples.filter((_, i) => i % Math.ceil(samples.length / 5000) === 0) : samples;
@@ -1795,8 +2158,10 @@ const AMEngine = (() => {
       // translucent; a normal opaque photo/logo area still ends up ~1 as before.
       const avgAlpha = alphaCount ? alphaSum / alphaCount / 255 : 1;
       const contours = traceMaskContours(mask, cw, ch);
-      const subpaths = contours
-        .map((c) => simplifyClosedPolygon(c, 1.0))
+      const simplifiedContours = contours.map((c) => simplifyClosedPolygon(c, 1.0));
+      const ringSign = referenceWindingSign(simplifiedContours);
+      const subpaths = simplifiedContours
+        .map((c) => offsetClosedPolygon(c, SEAM_OVERLAP_PX, ringSign))
         .filter((c) => c.length >= 3 && Math.abs(polygonArea(c)) >= minAreaPx)
         .map((c) => {
           const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x, y: p.y }));
@@ -1809,6 +2174,98 @@ const AMEngine = (() => {
       }
     }
     return results;
+  }
+
+  /* ===================== Raster image -> OCR text detection =====================
+     Recognizes text baked into a raster <image>'s own pixels and turns confident hits into
+     native AM text layers instead of letting quantizeAndTrace mangle them into illegible
+     path blobs (small glyphs/serifs trace especially badly - see the PALETTE_ALPHA_MIN and
+     minAreaPx notes above). A line only ever REPLACES the exact ink pixels it read with real
+     confidence; nothing is masked out on a guess, so an OCR miss just leaves that line for
+     the normal vector trace exactly as before - never a blank hole. */
+
+  const OCR_LANG = "eng+ind"; // Fritzy's own source text mixes Indonesian and English; change
+                               // this one string to any Tesseract language code(s) if needed.
+  const OCR_MIN_CONFIDENCE = 60; // Tesseract's own 0-100 score per line; raise for fewer/safer
+                                  // hits, lower to catch more stylized/blurry text.
+
+  // Samples the background luminance just outside [x0,y0,x1,y1), classifies pixels inside
+  // that deviate from it as "ink", erases those specific pixels from `imgData` (so they never
+  // reach quantizeAndTrace) and returns their average color. Returns null - and erases
+  // nothing - when there isn't enough real ink/background contrast to trust, so a bad OCR
+  // guess can never blank out real image content.
+  function eraseAndColorTextRegion(imgData, x0, y0, x1, y1) {
+    const { cw, ch, data } = imgData;
+    const px0 = Math.max(0, Math.floor(x0)), py0 = Math.max(0, Math.floor(y0));
+    const px1 = Math.min(cw, Math.ceil(x1)), py1 = Math.min(ch, Math.ceil(y1));
+    if (px1 - px0 < 2 || py1 - py0 < 2) return null;
+    let bgSum = 0, bgCount = 0;
+    const sampleBg = (x, y) => {
+      if (x < 0 || y < 0 || x >= cw || y >= ch) return;
+      const i = (y * cw + x) * 4;
+      if (data.data[i + 3] <= 8) return;
+      bgSum += 0.299 * data.data[i] + 0.587 * data.data[i + 1] + 0.114 * data.data[i + 2];
+      bgCount++;
+    };
+    for (let x = px0; x < px1; x++) { sampleBg(x, py0 - 1); sampleBg(x, py1); }
+    for (let y = py0; y < py1; y++) { sampleBg(px0 - 1, y); sampleBg(px1, y); }
+    const bgLum = bgCount ? bgSum / bgCount : 255;
+
+    let rSum = 0, gSum = 0, bSum = 0;
+    const inkIdx = [];
+    for (let y = py0; y < py1; y++) {
+      for (let x = px0; x < px1; x++) {
+        const i = (y * cw + x) * 4;
+        if (data.data[i + 3] <= 8) continue;
+        const lum = 0.299 * data.data[i] + 0.587 * data.data[i + 1] + 0.114 * data.data[i + 2];
+        if (Math.abs(lum - bgLum) > 40) {
+          rSum += data.data[i]; gSum += data.data[i + 1]; bSum += data.data[i + 2];
+          inkIdx.push(i);
+        }
+      }
+    }
+    if (inkIdx.length < 4) return null; // too little contrast to trust as real glyph ink
+    for (const i of inkIdx) data.data[i + 3] = 0; // erase from the raster the tracer will see
+    return { r: Math.round(rSum / inkIdx.length), g: Math.round(gSum / inkIdx.length), b: Math.round(bSum / inkIdx.length) };
+  }
+
+  // imgData: the {cw, ch, data} loaded by loadImageToCanvas (same shape quantizeAndTrace
+  // takes - `data` is the canvas ImageData, mutated in place for every line accepted below).
+  // Returns [] on any failure (CDN blocked, offline, decode error) rather than throwing, so a
+  // missing/failed OCR pass never blocks the rest of extraction - the image just falls back
+  // to a full vector trace, same as with detectText off.
+  async function recognizeImageText(imgData, opts = {}) {
+    if (typeof Tesseract === "undefined") return [];
+    const { cw, ch, data } = imgData;
+    let worker;
+    try {
+      const canvas = document.createElement("canvas");
+      canvas.width = cw;
+      canvas.height = ch;
+      canvas.getContext("2d").putImageData(data, 0, 0);
+      worker = await Tesseract.createWorker(opts.ocrLang || OCR_LANG);
+      const { data: ocr } = await worker.recognize(canvas);
+      const lines = (ocr && ocr.lines) || [];
+      const minConfidence = Number.isFinite(opts.ocrMinConfidence) ? opts.ocrMinConfidence : OCR_MIN_CONFIDENCE;
+      const out = [];
+      for (const line of lines) {
+        const text = (line.text || "").trim();
+        if (!text) continue;
+        if (!Number.isFinite(line.confidence) || line.confidence < minConfidence) continue;
+        const bbox = line.bbox || {};
+        const { x0, y0, x1, y1 } = bbox;
+        if (![x0, y0, x1, y1].every(Number.isFinite)) continue;
+        if (x1 - x0 < 3 || y1 - y0 < 3) continue; // too small to trust
+        const fillColor = eraseAndColorTextRegion(imgData, x0, y0, x1, y1);
+        if (!fillColor) continue; // not enough real ink contrast - leave for normal tracing
+        out.push({ text, x0, y0, x1, y1, fillColor, confidence: line.confidence });
+      }
+      return out;
+    } catch (e) {
+      return [];
+    } finally {
+      if (worker) { try { await worker.terminate(); } catch (e) { /* best-effort */ } }
+    }
   }
 
   function approximatePatternColor(patternEl, targetLocalBBox) {
@@ -1954,8 +2411,10 @@ const AMEngine = (() => {
 
     const contours = traceMaskContours(mask, cw, ch);
     const tol = 1.1;
-    return contours
-      .map((c) => simplifyClosedPolygon(c, tol))
+    const simplifiedContours = contours.map((c) => simplifyClosedPolygon(c, tol));
+    const ringSign = referenceWindingSign(simplifiedContours);
+    return simplifiedContours
+      .map((c) => offsetClosedPolygon(c, SEAM_OVERLAP_PX, ringSign))
       .filter((c) => c.length >= 3)
       .map((c) => {
         const sp = c.map((p, i) => ({
@@ -2152,8 +2611,10 @@ const AMEngine = (() => {
 
     const contours = traceMaskContours(mask, cw, ch);
     const tol = 1.1;
-    return contours
-      .map((c) => simplifyClosedPolygon(c, tol))
+    const simplifiedContours = contours.map((c) => simplifyClosedPolygon(c, tol));
+    const ringSign = referenceWindingSign(simplifiedContours);
+    return simplifiedContours
+      .map((c) => offsetClosedPolygon(c, SEAM_OVERLAP_PX, ringSign))
       .filter((c) => c.length >= 3)
       .map((c) => {
         const sp = c.map((p, i) => ({ type: i === 0 ? "M" : "L", x: p.x / scale + minX, y: p.y / scale + minY }));
@@ -2469,6 +2930,9 @@ const AMEngine = (() => {
   async function extractShapes(svgEl, opts = {}) {
     const doc = svgEl.ownerDocument;
     const results = [];
+    const textLayers = []; // native AM text layers built from OCR on raster <image> content
+                            // (see recognizeImageText) — kept separate from `results`, which
+                            // stays exactly what it was: vector shapes only.
     const warnings = [];
     const DRAWABLE = new Set(["path", "rect", "circle", "ellipse", "polygon", "polyline", "line"]);
     const SKIP_TAGS = new Set(["defs", "clipPath", "mask", "symbol", "title", "desc", "metadata", "style"]);
@@ -2503,8 +2967,15 @@ const AMEngine = (() => {
             imageCache.set(imgEl, { error: "load-failed" });
             return;
           }
+          // OCR runs BEFORE quantizeAndTrace and (for every line it trusts) erases that
+          // line's own ink pixels from `loaded.data` in place - see recognizeImageText.
+          // That order matters: it's what keeps a recognized line from also coming out as
+          // a second, messy path blob underneath its new text layer, and it's opt-in/
+          // best-effort enough (network CDN, confidence-gated) that turning it off or a
+          // failed load both fall back to exactly today's full vector trace, unchanged.
+          const textRegions = opts.detectText ? await recognizeImageText(loaded, opts) : [];
           const traced = quantizeAndTrace(loaded, maxColors);
-          imageCache.set(imgEl, { traced, cw: loaded.cw, ch: loaded.ch });
+          imageCache.set(imgEl, { traced, textRegions, cw: loaded.cw, ch: loaded.ch });
         })
       );
     }
@@ -2903,6 +3374,48 @@ const AMEngine = (() => {
         } else {
           warnings.push(`Elemen <image>: didekati sebagai ${cached.traced.length} bentuk warna datar (raster diposterisasi, bukan vektor asli).`);
         }
+
+        // ---- OCR text regions -> native AM text layers ----
+        // Skipped entirely when the <image> itself is clip-path'd: a text layer is always an
+        // axis-aligned box, and there's no safe way to intersect that against an arbitrary
+        // clip shape the way clipIntersectSubpaths does for real path geometry - so rather
+        // than risk cutting a text layer wrong (or worse, dropping content that was already
+        // erased from the raster above), that one combination just falls back to exactly
+        // today's full vector trace, unchanged.
+        if (cached.textRegions && cached.textRegions.length && !clipRefImg) {
+          const toWorld = (px, py) => {
+            const local = mpoint(imgMatrix, px, py);
+            return mpoint(matrix, local.x, local.y);
+          };
+          let textAny = 0;
+          for (const tr of cached.textRegions) {
+            const corners = [
+              toWorld(tr.x0, tr.y0), toWorld(tr.x1, tr.y0),
+              toWorld(tr.x1, tr.y1), toWorld(tr.x0, tr.y1),
+            ];
+            let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+            for (const c of corners) {
+              if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+              if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
+            }
+            const halfW = (maxX - minX) / 2, halfH = (maxY - minY) / 2;
+            if (halfW < 0.5 || halfH < 0.5) continue;
+            const imgLabel = el.getAttribute("id") || el.getAttribute("data-name") || `image ${autoIndex + 1}`;
+            textLayers.push({
+              label: `${imgLabel} teks: ${tr.text}`.slice(0, 80),
+              text: tr.text,
+              center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 },
+              halfW,
+              halfH,
+              fontSize: halfH * 2 * 0.82, // rough cap-height->em heuristic; free to retune in AM
+              fill: { r: tr.fillColor.r, g: tr.fillColor.g, b: tr.fillColor.b, a: Math.min(1, opacityMul) },
+            });
+            textAny++;
+          }
+          if (textAny) {
+            warnings.push(`Elemen <image>: ${textAny} baris teks terdeteksi (OCR) & diubah jadi text layer AM - skema XML-nya belum diverifikasi ke aplikasi asli, cek hasilnya setelah diimpor.`);
+          }
+        }
         return;
       }
 
@@ -3043,7 +3556,7 @@ const AMEngine = (() => {
     const rootMatrix = mtranslate(-rootVp.minX, -rootVp.minY);
     for (const child of Array.from(svgEl.children)) walk(child, rootMatrix, 0, [], []);
 
-    return { shapes: results, warnings, viewport: rootVp };
+    return { shapes: results, textLayers, warnings, viewport: rootVp };
   }
 
   /* ===================== AM path `d` serialization ===================== */
@@ -3071,7 +3584,1124 @@ const AMEngine = (() => {
     return idCounter++;
   }
 
-  function buildProjectXML(shapes, settings) {
+  /* ===================== Native AM shape detection =====================
+     Alight Motion has its own parametric shape templates - Rectangle, Rounded
+     Rectangle, Circle/Ellipse, Wide Line - reverse-engineered from the app's own
+     shape XML assets. A project references one via s=".rect" / s=".roundrect" /
+     s=".circle" / s=".wideline" plus <property> params, instead of a raw bezier
+     <path>: it renders as a crisp, exact, directly-editable shape in the app, with
+     none of a trace's bezier residue and far fewer bytes than the equivalent path.
+     Every extracted shape is tested against these templates before falling back to
+     a generic path; a shape only converts when its contour matches one within a
+     tight tolerance (see PRIMITIVE_FIT below) - anything uncertain keeps today's
+     path output, unchanged.
+     Rotation is deliberately never emitted for rect/roundrect/circle: only
+     axis-aligned matches are accepted, since a shape rotated by an exact multiple
+     of 90 degrees is indistinguishable, bbox-wise, from one with its width and
+     height swapped - so no <rotation> tag, and no risk of guessing AM's rotation
+     sign convention wrong. Wide Line is the one template whose own geometry (two
+     endpoints) already carries its angle unambiguously, so elongated shapes (icon
+     bars, a straight stroke already baked into a fill by strokeToFillSubpaths) are
+     matched at whatever angle they actually sit at. */
+
+  const PRIMITIVE_FIT = {
+    ellipseRelTol: 0.045,
+    ellipseAbsFloor: 0.6,
+    rectRelTol: 0.028,
+    rectAbsFloor: 1.4,
+    elongationRatio: 0.4,
+    minCornerRadiusRatio: 0.012,
+    minCornerRadiusAbs: 0.6,
+    ringGapRelTol: 0.28,
+  };
+
+  // Every vertex of ANY convex polygon trivially sits on its OWN bounding box (each corner
+  // is the extremal point in at least one axis) - so validating a candidate box using only
+  // the polygon's corners can't tell a true axis-aligned rectangle from one that's simply
+  // rotated (its straight edges would cut across the box's interior, but the corners alone
+  // never show that). Sampling a few extra points along the way for each straight run, not
+  // just its endpoint, is what lets roundedRectMaxError actually catch that case.
+  function flattenSubpathPoints(subpath) {
+    const pts = [];
+    let cur = null;
+    for (const seg of subpath) {
+      if (seg.type === "M") {
+        cur = { x: seg.x, y: seg.y };
+        pts.push(cur);
+      } else if (seg.type === "L") {
+        const p0 = cur;
+        const p1 = { x: seg.x, y: seg.y };
+        if (p0) {
+          const STEPS = 5;
+          for (let i = 1; i <= STEPS; i++) {
+            const t = i / STEPS;
+            pts.push({ x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t });
+          }
+        } else {
+          pts.push(p1);
+        }
+        cur = p1;
+      } else if (seg.type === "C") {
+        const p0 = cur;
+        const p1 = { x: seg.x1, y: seg.y1 };
+        const p2 = { x: seg.x2, y: seg.y2 };
+        const p3 = { x: seg.x, y: seg.y };
+        if (p0) {
+          const STEPS = 14;
+          for (let i = 1; i <= STEPS; i++) {
+            const t = i / STEPS, mt = 1 - t;
+            pts.push({
+              x: mt * mt * mt * p0.x + 3 * mt * mt * t * p1.x + 3 * mt * t * t * p2.x + t * t * t * p3.x,
+              y: mt * mt * mt * p0.y + 3 * mt * mt * t * p1.y + 3 * mt * t * t * p2.y + t * t * t * p3.y,
+            });
+          }
+        }
+        cur = p3;
+      }
+    }
+    return pts;
+  }
+
+  function pointsBBox(points) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of points) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
+  }
+
+  // Standard rounded-box signed distance field (Inigo Quilez's formulation): points ON the
+  // boundary of a box with half-extents (halfW,halfH) and corner radius r score ~0. Used both
+  // to VALIDATE a rect/roundrect/wideline candidate (max |sdf| over all contour points) and,
+  // via bestCornerRadius below, to FIND the corner radius that fits best.
+  function roundedRectMaxError(localPts, halfW, halfH, r) {
+    let maxErr = 0;
+    for (const p of localPts) {
+      const qx = Math.abs(p.x) - (halfW - r);
+      const qy = Math.abs(p.y) - (halfH - r);
+      const dist = Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r;
+      const err = Math.abs(dist);
+      if (err > maxErr) maxErr = err;
+    }
+    return maxErr;
+  }
+
+  function bestCornerRadius(localPts, halfW, halfH) {
+    const maxR = Math.min(halfW, halfH);
+    if (maxR <= 0) return { r: 0, err: Infinity };
+    let bestR = 0, bestErr = roundedRectMaxError(localPts, halfW, halfH, 0);
+    const STEPS = 40;
+    for (let i = 1; i <= STEPS; i++) {
+      const r = (maxR * i) / STEPS;
+      const err = roundedRectMaxError(localPts, halfW, halfH, r);
+      if (err < bestErr) { bestErr = err; bestR = r; }
+    }
+    const span = maxR / STEPS;
+    let lo = Math.max(0, bestR - span), hi = Math.min(maxR, bestR + span);
+    for (let i = 0; i <= 20; i++) {
+      const r = lo + ((hi - lo) * i) / 20;
+      const err = roundedRectMaxError(localPts, halfW, halfH, r);
+      if (err < bestErr) { bestErr = err; bestR = r; }
+    }
+    return { r: bestR, err: bestErr };
+  }
+
+  // Axis-aligned only, deliberately: a true circle's bbox (and its distance-from-center
+  // test) is rotation-invariant, so a rotated circle still matches; a rotated NON-circular
+  // ellipse won't, and is left for the generic path - see the module comment above.
+  function fitAxisAlignedEllipse(points) {
+    const b = pointsBBox(points);
+    const rx = (b.maxX - b.minX) / 2;
+    const ry = (b.maxY - b.minY) / 2;
+    if (rx < 0.05 || ry < 0.05) return null;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    let maxErr = 0;
+    for (const p of points) {
+      const nx = (p.x - cx) / rx, ny = (p.y - cy) / ry;
+      const err = Math.abs(Math.hypot(nx, ny) - 1);
+      if (err > maxErr) maxErr = err;
+    }
+    const tol = PRIMITIVE_FIT.ellipseRelTol + PRIMITIVE_FIT.ellipseAbsFloor / Math.max(rx, ry, 1);
+    if (maxErr > tol) return null;
+    return { kind: "ellipse", localCenter: { x: cx, y: cy }, rx, ry };
+  }
+
+  function fitAxisAlignedRoundedRect(points) {
+    const b = pointsBBox(points);
+    const halfW = (b.maxX - b.minX) / 2;
+    const halfH = (b.maxY - b.minY) / 2;
+    if (halfW < 0.05 || halfH < 0.05) return null;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    const local = points.map((p) => ({ x: p.x - cx, y: p.y - cy }));
+    const { r, err } = bestCornerRadius(local, halfW, halfH);
+    const tol = Math.max(PRIMITIVE_FIT.rectRelTol * Math.max(halfW, halfH), PRIMITIVE_FIT.rectAbsFloor);
+    if (err > tol) return null;
+    const rMin = Math.max(PRIMITIVE_FIT.minCornerRadiusRatio * Math.min(halfW, halfH), PRIMITIVE_FIT.minCornerRadiusAbs);
+    const finalR = r < rMin ? 0 : Math.min(r, Math.min(halfW, halfH), 2000);
+    return { kind: "rect", localCenter: { x: cx, y: cy }, halfW, halfH, r: finalR };
+  }
+
+  // Thin, elongated blobs (icon bars, a straight stroke already baked into a fill by
+  // strokeToFillSubpaths) matched at WHATEVER angle they sit at via their own principal
+  // axis (2x2 covariance eigenvector - closed form). Unlike rect/roundrect/circle this
+  // needs no separate <rotation>, since start/end already carry the angle directly.
+  function fitOrientedThinBar(points) {
+    let cx = 0, cy = 0;
+    for (const p of points) { cx += p.x; cy += p.y; }
+    cx /= points.length; cy /= points.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const p of points) {
+      const dx = p.x - cx, dy = p.y - cy;
+      sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+    }
+    sxx /= points.length; syy /= points.length; sxy /= points.length;
+    const theta = (Math.abs(sxy) < 1e-9 && Math.abs(sxx - syy) < 1e-9) ? 0 : 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    const ct = Math.cos(theta), st = Math.sin(theta);
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    const rotated = points.map((p) => {
+      const dx = p.x - cx, dy = p.y - cy;
+      const u = dx * ct + dy * st, v = -dx * st + dy * ct;
+      if (u < minU) minU = u; if (u > maxU) maxU = u;
+      if (v < minV) minV = v; if (v > maxV) maxV = v;
+      return { x: u, y: v };
+    });
+    const halfLong = (maxU - minU) / 2;
+    const halfShort = (maxV - minV) / 2;
+    if (halfLong < 0.05 || halfShort < 0.05 || halfShort > halfLong * PRIMITIVE_FIT.elongationRatio) return null;
+    const midU = (minU + maxU) / 2, midV = (minV + maxV) / 2;
+    const centeredLocal = rotated.map((p) => ({ x: p.x - midU, y: p.y - midV }));
+    const err = roundedRectMaxError(centeredLocal, halfLong, halfShort, 0);
+    const tol = Math.max(PRIMITIVE_FIT.rectRelTol * halfLong, PRIMITIVE_FIT.rectAbsFloor);
+    if (err > tol) return null;
+    const centerX = cx + midU * ct - midV * st;
+    const centerY = cy + midU * st + midV * ct;
+    return {
+      kind: "wideline",
+      localCenter: { x: centerX, y: centerY },
+      start: { x: -ct * halfLong, y: -st * halfLong },
+      end: { x: ct * halfLong, y: st * halfLong },
+      lineWidth: halfShort,
+    };
+  }
+
+  function fitPrimitiveSingle(points) {
+    return fitAxisAlignedEllipse(points) || fitOrientedThinBar(points) || fitAxisAlignedRoundedRect(points);
+  }
+
+  // One shape's own subpaths -> null, a normal (filled) primitive, or a stroke-only "ring"
+  // primitive (two opposite-wound contours a consistent gap apart - the same shape a
+  // stroke-only <rect>/<circle> becomes after strokeToFillSubpaths). Never guesses: every
+  // branch either fits within PRIMITIVE_FIT's tolerances or returns null, leaving the shape
+  // on today's generic <path> output.
+  function classifyShapePrimitive(shape) {
+    const subpaths = shape.subpaths;
+    if (!subpaths || !subpaths.length || subpaths.length > 2) return null;
+    const contourPts = subpaths.map(flattenSubpathPoints).filter((p) => p.length >= 4);
+    if (contourPts.length !== subpaths.length) return null;
+
+    if (contourPts.length === 1) {
+      const fit = fitPrimitiveSingle(contourPts[0]);
+      return fit ? { ...fit, strokeOnly: false } : null;
+    }
+
+    const areaA = polygonArea(contourPts[0]);
+    const areaB = polygonArea(contourPts[1]);
+    if (!areaA || !areaB || Math.sign(areaA) === Math.sign(areaB)) return null;
+    const outerIdx = Math.abs(areaA) >= Math.abs(areaB) ? 0 : 1;
+    const innerIdx = outerIdx === 0 ? 1 : 0;
+    const outerFit = fitAxisAlignedEllipse(contourPts[outerIdx]) || fitAxisAlignedRoundedRect(contourPts[outerIdx]);
+    const innerFit = fitAxisAlignedEllipse(contourPts[innerIdx]) || fitAxisAlignedRoundedRect(contourPts[innerIdx]);
+    if (!outerFit || !innerFit || outerFit.kind !== innerFit.kind) return null;
+
+    const localCenter = {
+      x: (outerFit.localCenter.x + innerFit.localCenter.x) / 2,
+      y: (outerFit.localCenter.y + innerFit.localCenter.y) / 2,
+    };
+    let deltaA, deltaB, mid;
+    if (outerFit.kind === "ellipse") {
+      deltaA = outerFit.rx - innerFit.rx;
+      deltaB = outerFit.ry - innerFit.ry;
+      mid = { kind: "ellipse", localCenter, rx: (outerFit.rx + innerFit.rx) / 2, ry: (outerFit.ry + innerFit.ry) / 2 };
+    } else {
+      deltaA = outerFit.halfW - innerFit.halfW;
+      deltaB = outerFit.halfH - innerFit.halfH;
+      mid = {
+        kind: "rect", localCenter,
+        halfW: (outerFit.halfW + innerFit.halfW) / 2,
+        halfH: (outerFit.halfH + innerFit.halfH) / 2,
+        r: (outerFit.r + innerFit.r) / 2,
+      };
+    }
+    if (deltaA <= 0 || deltaB <= 0 || Math.abs(deltaA - deltaB) > PRIMITIVE_FIT.ringGapRelTol * Math.max(deltaA, deltaB)) return null;
+    return { ...mid, strokeOnly: true, strokeWidth: (deltaA + deltaB) / 2 };
+  }
+
+  // Classifies every shape, then merges an adjacent fill+stroke pair from the SAME source
+  // element (emitShape's own "<label> (stroke)" convention - see the STROKE block in
+  // walk()) into one shape: the fill's own geometry plus the stroke ring's width as a
+  // native <border>, instead of two separate shapes stacked on top of each other.
+  function planPrimitiveShapes(shapes) {
+    const plan = shapes.map((shape) => ({ shape, primitive: classifyShapePrimitive(shape) }));
+    for (let i = 0; i < plan.length - 1; i++) {
+      const cur = plan[i], next = plan[i + 1];
+      if (!cur.primitive || cur.primitive.strokeOnly) continue;
+      if (!next.primitive || !next.primitive.strokeOnly) continue;
+      if (next.shape.label !== `${cur.shape.label} (stroke)`) continue;
+      if (next.primitive.kind !== cur.primitive.kind) continue;
+      cur.primitive = { ...cur.primitive, border: { color: next.shape.fill, width: next.primitive.strokeWidth } };
+      next.consumed = true;
+    }
+    return plan.filter((p) => !p.consumed);
+  }
+
+  /* ===================== Smart Shape Reconstruction (raster -> clean, native shapes) =====================
+     A second, OPT-IN way to read a raster image (PNG/JPG icon, logo, UI glyph, blurry screenshot),
+     alongside - never instead of - quantizeAndTrace above. quantizeAndTrace follows the pixels: one
+     fixed 1px simplify pass, so a soft or noisy source keeps its jagged contour and then misses the
+     PRIMITIVE_FIT tolerances, falling back to a heavy generic <path>. This pipeline instead rebuilds
+     the SHAPES the pixels were drawn from, and hands the result to the rest of Jalur as an ordinary
+     SVG string (<circle>/<ellipse>/<rect>/<polygon>/<path> with plain fill/stroke attributes), so it
+     goes through the very same loadSvgText -> extractShapes -> planPrimitiveShapes ->
+     buildProjectXML path as any pasted SVG. Nothing above or below this section is modified.
+
+     Per image:
+       1. palette      median-cut + merge-close (reused), then rare transition-band colors are dropped
+                       so a blurred edge folds into the flat color it is nearest to (its 50% line -
+                       the true edge - becomes the boundary).
+       2. label image  every pixel -> palette index (or "transparent"); a corner-preserving
+                       neighbourhood filter removes speckle / 1px jitter, then tiny regions merge into
+                       the neighbour they touch most.
+       3. components   each same-color region is one shape candidate. Enclosed holes are classed as
+                       COVERED (another color sits in them -> just paint the parent solid and let the
+                       child draw on top, no seams, no cut-outs) or REAL (transparent -> stays a hole).
+       4. fit          the dense traced contour is tested against ellipse / rounded rect / oriented
+                       thin bar with an adjustable tolerance (percentile error, so a couple of noisy
+                       pixels never veto a clean shape). Two concentric matching contours become ONE
+                       shape with a native stroke; a ring whose middle is just another color becomes
+                       a fill+stroke primitive.
+       5. fallback     anything uncertain is Douglas-Peucker simplified, real corners are kept sharp and
+                       the runs between them are smoothed into cubic Beziers (Catmull-Rom).
+     Shapes are emitted back-to-front (largest solid first), like a person would stack them. */
+
+  const RECON_MAX_DIM = 760;
+  const RECON_MAX_COMPONENTS = 2500;
+  const RECON_DEFAULTS = { detail: 45, shape: 60, corner: 50, smooth: 55, noise: 50, stroke: 60, colors: 50 };
+  const RECON_KIND_COLORS = {
+    ellipse: "#2B4EFF",
+    rect: "#CC2318",
+    roundrect: "#E08A00",
+    wideline: "#007A45",
+    border: "#7A3CFF",
+    polygon: "#0B0B0C",
+    curve: "#0B0B0C",
+  };
+
+  function reconClamp(v, lo, hi) { return v < lo ? lo : v > hi ? hi : v; }
+  function reconLerp(a, b, t) { return a + (b - a) * t; }
+  function reconNum(v, def) {
+    const n = Number(v);
+    return Number.isFinite(n) ? reconClamp(n, 0, 100) : def;
+  }
+  function reconFmt(v) {
+    const r = Math.round(v * 1000) / 1000;
+    return String(Object.is(r, -0) ? 0 : r);
+  }
+
+  // Turns the 0-100 sliders into the concrete numbers the pipeline works with. Pixel-based values
+  // scale with the image's own size so the same slider position behaves alike on a 32px glyph and a
+  // 700px illustration (noise is a property of the SOURCE pixels, simplification of the visible size).
+  function reconResolveParams(userOpts, cw, ch) {
+    const o = {};
+    for (const k of Object.keys(RECON_DEFAULTS)) o[k] = reconNum(userOpts && userOpts[k], RECON_DEFAULTS[k]);
+    const t = (k) => o[k] / 100;
+    const L = Math.max(cw, ch);
+    const filterRadius = o.noise <= 0 ? 0 : Math.max(1, Math.round(reconLerp(1, 4, t("noise")) * reconClamp(L / 300, 0.3, 2.5)));
+    return {
+      maxColors: Math.max(2, Math.round(reconLerp(24, 3, t("colors")))),
+      mergeThreshold: reconLerp(16, 64, t("colors")),
+      minWeightFrac: reconLerp(0.0002, 0.008, t("colors")),
+      blendStrength: reconClamp(0.35 * t("colors") + 0.65 * t("noise"), 0, 1),
+      filterRadius,
+      // Lower keep-fraction = a pixel needs to be a clearer minority before it is repainted. Keeping it
+      // under 0.5 is what stops the filter from rounding off real sharp corners; "Stroke Detection"
+      // lowers it further so 1-2px hairlines survive instead of being taken for noise.
+      filterKeep: reconClamp(reconLerp(0.26, 0.45, t("noise")) - 0.08 * t("stroke"), 0.15, 0.5),
+      minBlobArea: o.noise <= 0 ? 2 : Math.max(3, Math.round(cw * ch * reconLerp(0.00002, 0.0006, t("noise")))),
+      rdpTol: reconLerp(0.9, 4.8, t("detail")) * reconClamp(L / 450, 0.75, 2.2),
+      tolMul: reconLerp(0.6, 3.0, t("shape")),
+      cornerDeg: reconLerp(55, 14, t("corner")),
+      smooth: t("smooth"),
+      strokeTolMul: o.stroke <= 0 ? 0 : reconLerp(0.6, 2.0, t("stroke")),
+      seamPx: SEAM_OVERLAP_PX * reconClamp(L / 500, 0.4, 1.5),
+      cornerSnap: filterRadius > 0 ? filterRadius * 1.5 + 0.6 : 0.6,
+    };
+  }
+
+  async function reconLoadSource(href) {
+    return loadImageToCanvas(href, RECON_MAX_DIM);
+  }
+
+  /* ---------- 1. palette + label image ---------- */
+
+  function reconBuildPalette(px, n, params) {
+    const samples = [];
+    for (let i = 0; i < n; i++) {
+      if (px[i * 4 + 3] > 8) samples.push([px[i * 4], px[i * 4 + 1], px[i * 4 + 2]]);
+    }
+    if (!samples.length) return [];
+    const step = samples.length > 6000 ? Math.ceil(samples.length / 6000) : 1;
+    const analysis = [];
+    for (let i = 0; i < samples.length; i += step) analysis.push(samples[i].slice());
+    let palette = medianCutQuantize(analysis, params.maxColors);
+    palette = mergeClosePalette(palette, params.mergeThreshold);
+    const total = palette.reduce((s, p) => s + p.weight, 0) || 1;
+    palette.sort((a, b) => b.weight - a.weight);
+
+    // A blurred/anti-aliased edge between two flat colors quantizes into its OWN cluster - and
+    // because the blur runs the full length of every edge it touches, that cluster is NOT always
+    // a thin sliver of the total weight (a soft 12px stroke can spend a third of its own pixels in
+    // the transition). Weight alone can't tell a wide blend band from a genuinely small third color,
+    // so each candidate is instead tested against every pair of colors ALREADY kept: if it sits close
+    // to the straight line between two of them, it IS that blend (its pixels fall back to whichever
+    // flat side they are actually nearest to); a color that is not near any such line is real and is
+    // kept however small it is.
+    const blendPerpTol = reconLerp(14, 34, params.blendStrength);
+    const isBlend = (c, kept) => {
+      for (let a = 0; a < kept.length; a++) {
+        for (let b = a + 1; b < kept.length; b++) {
+          const A = kept[a].color, B = kept[b].color;
+          const abx = B[0] - A[0], aby = B[1] - A[1], abz = B[2] - A[2];
+          const abLen2 = abx * abx + aby * aby + abz * abz;
+          if (abLen2 < 25) continue;
+          const acx = c[0] - A[0], acy = c[1] - A[1], acz = c[2] - A[2];
+          const t = (acx * abx + acy * aby + acz * abz) / abLen2;
+          if (t < -0.18 || t > 1.18) continue;
+          const px2 = A[0] + t * abx, py2 = A[1] + t * aby, pz2 = A[2] + t * abz;
+          if (Math.hypot(c[0] - px2, c[1] - py2, c[2] - pz2) <= blendPerpTol) return true;
+        }
+      }
+      return false;
+    };
+    const kept = [palette[0]];
+    for (let i = 1; i < palette.length; i++) {
+      const p = palette[i];
+      const frac = p.weight / total;
+      if (frac >= params.minWeightFrac && !isBlend(p.color, kept)) kept.push(p);
+    }
+    return kept.map((p) => p.color);
+  }
+
+  function reconLabelPixels(px, n, palette) {
+    const T = palette.length;
+    const labels = new Uint8Array(n);
+    const cache = new Int16Array(1 << 18).fill(-1);
+    for (let i = 0; i < n; i++) {
+      const o = i * 4;
+      if (px[o + 3] <= 8) { labels[i] = T; continue; }
+      const r = px[o], g = px[o + 1], b = px[o + 2];
+      const key = ((r >> 2) << 12) | ((g >> 2) << 6) | (b >> 2);
+      let idx = cache[key];
+      if (idx < 0) { idx = nearestPaletteIdx(r, g, b, palette); cache[key] = idx; }
+      labels[i] = idx;
+    }
+    return labels;
+  }
+
+  // Multi-class neighbourhood filter: a pixel is repainted with the locally dominant class only when
+  // its OWN class holds less than `keepFrac` of the window (isolated noise, 1px jitter, pinholes).
+  // A plain majority filter uses 0.5 and visibly rounds convex corners (a right-angle tip holds only
+  // ~25-36% of its own window); keeping the bar lower preserves them.
+  function reconFilterLabels(labels, cw, ch, K1, radius, keepFrac) {
+    if (radius <= 0) return labels;
+    const n = cw * ch;
+    const counts = new Int32Array(K1);
+    for (let i = 0; i < n; i++) counts[labels[i]]++;
+    const out = labels.slice();
+    const own = new Int32Array(n);
+    const bestCnt = new Int32Array(n);
+    const bestLab = new Uint8Array(n);
+    const W1 = cw + 1;
+    const integral = new Int32Array(W1 * (ch + 1));
+    for (let k = 0; k < K1; k++) {
+      if (!counts[k]) continue;
+      for (let y = 0; y < ch; y++) {
+        let rowSum = 0;
+        const rb = y * cw, ic = (y + 1) * W1, ip = y * W1;
+        for (let x = 0; x < cw; x++) {
+          if (labels[rb + x] === k) rowSum++;
+          integral[ic + x + 1] = integral[ip + x + 1] + rowSum;
+        }
+      }
+      for (let y = 0; y < ch; y++) {
+        const y0 = y - radius < 0 ? 0 : y - radius;
+        const y1 = y + radius >= ch ? ch - 1 : y + radius;
+        for (let x = 0; x < cw; x++) {
+          const x0 = x - radius < 0 ? 0 : x - radius;
+          const x1 = x + radius >= cw ? cw - 1 : x + radius;
+          const s = integral[(y1 + 1) * W1 + x1 + 1] - integral[y0 * W1 + x1 + 1] - integral[(y1 + 1) * W1 + x0] + integral[y0 * W1 + x0];
+          const p = y * cw + x;
+          if (labels[p] === k) own[p] = s;
+          if (s > bestCnt[p]) { bestCnt[p] = s; bestLab[p] = k; }
+        }
+      }
+    }
+    for (let y = 0; y < ch; y++) {
+      const y0 = y - radius < 0 ? 0 : y - radius;
+      const y1 = y + radius >= ch ? ch - 1 : y + radius;
+      for (let x = 0; x < cw; x++) {
+        const x0 = x - radius < 0 ? 0 : x - radius;
+        const x1 = x + radius >= cw ? cw - 1 : x + radius;
+        const area = (x1 - x0 + 1) * (y1 - y0 + 1);
+        const p = y * cw + x;
+        if (bestLab[p] !== labels[p] && own[p] < keepFrac * area) out[p] = bestLab[p];
+      }
+    }
+    return out;
+  }
+
+  // 4-connected same-class regions of the label image (transparent included).
+  function reconLabelRegions(labels, cw, ch) {
+    const n = cw * ch;
+    const ids = new Int32Array(n).fill(-1);
+    const regions = [];
+    const stack = new Int32Array(n);
+    for (let s = 0; s < n; s++) {
+      if (ids[s] !== -1) continue;
+      const lab = labels[s];
+      const id = regions.length;
+      let sp = 0, area = 0, minX = cw, minY = ch, maxX = -1, maxY = -1;
+      stack[sp++] = s;
+      ids[s] = id;
+      while (sp > 0) {
+        const p = stack[--sp];
+        area++;
+        const x = p % cw, y = (p / cw) | 0;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+        if (x > 0 && ids[p - 1] === -1 && labels[p - 1] === lab) { ids[p - 1] = id; stack[sp++] = p - 1; }
+        if (x < cw - 1 && ids[p + 1] === -1 && labels[p + 1] === lab) { ids[p + 1] = id; stack[sp++] = p + 1; }
+        if (y > 0 && ids[p - cw] === -1 && labels[p - cw] === lab) { ids[p - cw] = id; stack[sp++] = p - cw; }
+        if (y < ch - 1 && ids[p + cw] === -1 && labels[p + cw] === lab) { ids[p + cw] = id; stack[sp++] = p + cw; }
+      }
+      regions.push({ label: lab, area, minX, minY, maxX, maxY });
+    }
+    return { ids, regions };
+  }
+
+  // Regions under minArea are repainted with whichever neighbouring class touches them most.
+  function reconMergeSmallRegions(labels, cw, ch, minArea) {
+    if (minArea <= 1) return labels;
+    for (let pass = 0; pass < 2; pass++) {
+      const { ids, regions } = reconLabelRegions(labels, cw, ch);
+      const small = [];
+      for (let i = 0; i < regions.length; i++) if (regions[i].area < minArea) small.push(i);
+      if (!small.length) break;
+      small.sort((a, b) => regions[a].area - regions[b].area);
+      for (const rid of small) {
+        const r = regions[rid];
+        const votes = new Map();
+        const vote = (q) => { const l = labels[q]; votes.set(l, (votes.get(l) || 0) + 1); };
+        for (let y = r.minY; y <= r.maxY; y++) {
+          for (let x = r.minX; x <= r.maxX; x++) {
+            const p = y * cw + x;
+            if (ids[p] !== rid) continue;
+            if (x > 0 && ids[p - 1] !== rid) vote(p - 1);
+            if (x < cw - 1 && ids[p + 1] !== rid) vote(p + 1);
+            if (y > 0 && ids[p - cw] !== rid) vote(p - cw);
+            if (y < ch - 1 && ids[p + cw] !== rid) vote(p + cw);
+          }
+        }
+        if (!votes.size) continue;
+        let best = -1, bestV = -1;
+        for (const [l, v] of votes) if (v > bestV) { bestV = v; best = l; }
+        for (let y = r.minY; y <= r.maxY; y++) {
+          for (let x = r.minX; x <= r.maxX; x++) {
+            const p = y * cw + x;
+            if (ids[p] === rid) labels[p] = best;
+          }
+        }
+      }
+    }
+    return labels;
+  }
+
+  /* ---------- 3. components, holes ---------- */
+
+  function reconLargestContour(contours, ox, oy) {
+    let best = null, bestA = 0;
+    for (const c of contours) {
+      const a = Math.abs(polygonArea(c));
+      if (a > bestA) { bestA = a; best = c; }
+    }
+    return best ? best.map((p) => ({ x: p.x + ox, y: p.y + oy })) : null;
+  }
+
+  function reconAnalyzeComponent(ids, px, cw, regions, id, T, holeMin) {
+    const reg = regions[id];
+    const pad = 1;
+    const w = reg.maxX - reg.minX + 1 + pad * 2;
+    const h = reg.maxY - reg.minY + 1 + pad * 2;
+    const ox = reg.minX - pad, oy = reg.minY - pad;
+    const mask = new Uint8Array(w * h);
+    const hist = new Uint32Array(1024);
+    for (let y = reg.minY; y <= reg.maxY; y++) {
+      const rowG = y * cw;
+      const rowL = (y - oy) * w - ox;
+      for (let x = reg.minX; x <= reg.maxX; x++) {
+        const p = rowG + x;
+        if (ids[p] !== id) continue;
+        mask[rowL + x] = 1;
+        const o = p * 4;
+        hist[px[o]]++;
+        hist[256 + px[o + 1]]++;
+        hist[512 + px[o + 2]]++;
+        hist[768 + px[o + 3]]++;
+      }
+    }
+    // Median (not mean) of the region's own pixels: edge blends are a minority, so the flat interior
+    // color wins and the fill never drifts toward a neighbour.
+    const median = (base) => {
+      let acc = 0;
+      const half = reg.area / 2;
+      for (let v = 0; v < 256; v++) { acc += hist[base + v]; if (acc >= half) return v; }
+      return 255;
+    };
+    const color = [median(0), median(256), median(512)];
+    const alpha = median(768) / 255;
+
+    // Flood the complement from the padded border: whatever it cannot reach is enclosed by the region.
+    const outside = new Uint8Array(w * h);
+    const stack = new Int32Array(w * h);
+    let sp = 0;
+    const push = (q) => { if (!mask[q] && !outside[q]) { outside[q] = 1; stack[sp++] = q; } };
+    for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+    for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+    while (sp > 0) {
+      const q = stack[--sp];
+      const x = q % w;
+      if (x > 0) push(q - 1);
+      if (x < w - 1) push(q + 1);
+      if (q >= w) push(q - w);
+      if (q < w * (h - 1)) push(q + w);
+    }
+    const solid = new Uint8Array(w * h);
+    let solidArea = 0;
+    for (let q = 0; q < w * h; q++) if (!outside[q]) { solid[q] = 1; solidArea++; }
+
+    const holes = [];
+    const seen = new Uint8Array(w * h);
+    for (let q0 = 0; q0 < w * h; q0++) {
+      if (!solid[q0] || mask[q0] || seen[q0]) continue;
+      const pix = [];
+      let s2 = 0, transparent = 0;
+      const kids = new Map();
+      stack[s2++] = q0;
+      seen[q0] = 1;
+      while (s2 > 0) {
+        const p = stack[--s2];
+        pix.push(p);
+        const x = p % w, y = (p / w) | 0;
+        const rid = ids[(y + oy) * cw + (x + ox)];
+        if (regions[rid].label === T) transparent++;
+        else kids.set(rid, (kids.get(rid) || 0) + 1);
+        const tryPush = (q) => { if (solid[q] && !mask[q] && !seen[q]) { seen[q] = 1; stack[s2++] = q; } };
+        if (x > 0) tryPush(p - 1);
+        if (x < w - 1) tryPush(p + 1);
+        if (y > 0) tryPush(p - w);
+        if (y < h - 1) tryPush(p + w);
+      }
+      if (pix.length < holeMin) continue; // pinhole: simply painted over
+      holes.push({ pix, area: pix.length, transparent, kids, real: transparent / pix.length >= 0.08, contour: undefined });
+    }
+
+    const outerContours = traceMaskContours(solid, w, h).filter((c) => c.length >= 4);
+    outerContours.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
+    const outer = outerContours.length ? outerContours[0].map((p) => ({ x: p.x + ox, y: p.y + oy })) : null;
+    const multi = outerContours.length > 1 && Math.abs(polygonArea(outerContours[1])) >= holeMin;
+
+    const desc = new Set();
+    for (const hl of holes) for (const k of hl.kids.keys()) desc.add(k);
+
+    return { id, w, h, ox, oy, color, alpha, area: reg.area, solidArea, holes, outer, outerContours, multi, desc, nbrs: new Set(), consumed: false };
+  }
+
+  function reconHoleContour(comp, hole) {
+    if (hole.contour === undefined) {
+      const m = new Uint8Array(comp.w * comp.h);
+      for (const p of hole.pix) m[p] = 1;
+      hole.contour = reconLargestContour(traceMaskContours(m, comp.w, comp.h), comp.ox, comp.oy);
+    }
+    return hole.contour;
+  }
+
+  /* ---------- 4. primitive fits (dense contour points, percentile error, adjustable tolerance) ---------- */
+
+  const RECON_ERR_PCT = 0.98;
+
+  function reconFitEllipse(points, tolMul) {
+    const b = pointsBBox(points);
+    const rx = (b.maxX - b.minX) / 2, ry = (b.maxY - b.minY) / 2;
+    if (rx < 1.2 || ry < 1.2) return null;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    const errs = new Float32Array(points.length);
+    for (let i = 0; i < points.length; i++) {
+      errs[i] = Math.abs(Math.hypot((points[i].x - cx) / rx, (points[i].y - cy) / ry) - 1);
+    }
+    errs.sort();
+    const err = errs[Math.min(errs.length - 1, Math.floor(errs.length * RECON_ERR_PCT))];
+    const tol = (PRIMITIVE_FIT.ellipseRelTol + PRIMITIVE_FIT.ellipseAbsFloor / Math.max(rx, ry, 1)) * tolMul;
+    if (err > tol) return null;
+    return { kind: "ellipse", cx, cy, rx, ry, ratio: err / tol };
+  }
+
+  // Error of every point against a rounded-rect SDF, reported at RECON_ERR_PCT (scratch is sorted in place).
+  function reconRectError(local, halfW, halfH, r, scratch) {
+    for (let i = 0; i < local.length; i++) {
+      const qx = Math.abs(local[i].x) - (halfW - r);
+      const qy = Math.abs(local[i].y) - (halfH - r);
+      scratch[i] = Math.abs(Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r);
+    }
+    scratch.sort();
+    return scratch[Math.min(scratch.length - 1, Math.floor(scratch.length * RECON_ERR_PCT))];
+  }
+
+  function reconFitRoundedRect(points, tolMul, cornerSnap) {
+    const b = pointsBBox(points);
+    const halfW = (b.maxX - b.minX) / 2, halfH = (b.maxY - b.minY) / 2;
+    if (halfW < 1.2 || halfH < 1.2) return null;
+    const cx = (b.minX + b.maxX) / 2, cy = (b.minY + b.maxY) / 2;
+    const local = points.map((p) => ({ x: p.x - cx, y: p.y - cy }));
+    const scratch = new Float32Array(local.length);
+    const maxR = Math.min(halfW, halfH);
+    let bestR = 0, bestErr = reconRectError(local, halfW, halfH, 0, scratch);
+    const STEPS = 32;
+    for (let i = 1; i <= STEPS; i++) {
+      const r = (maxR * i) / STEPS;
+      const e = reconRectError(local, halfW, halfH, r, scratch);
+      if (e < bestErr) { bestErr = e; bestR = r; }
+    }
+    const span = maxR / STEPS;
+    const lo = Math.max(0, bestR - span), hi = Math.min(maxR, bestR + span);
+    for (let i = 0; i <= 12; i++) {
+      const r = lo + ((hi - lo) * i) / 12;
+      const e = reconRectError(local, halfW, halfH, r, scratch);
+      if (e < bestErr) { bestErr = e; bestR = r; }
+    }
+    const tol = Math.max(PRIMITIVE_FIT.rectRelTol * Math.max(halfW, halfH), PRIMITIVE_FIT.rectAbsFloor) * tolMul;
+    if (bestErr > tol) return null;
+    let r = Math.min(bestR, maxR);
+    // A radius no bigger than what the noise filter itself could have rounded off is indistinguishable
+    // from a sharp corner - snap it, when the sharp version still fits.
+    const rMin = Math.max(PRIMITIVE_FIT.minCornerRadiusRatio * maxR, PRIMITIVE_FIT.minCornerRadiusAbs, cornerSnap || 0);
+    if (r < rMin) {
+      const e0 = reconRectError(local, halfW, halfH, 0, scratch);
+      if (e0 <= tol) { r = 0; bestErr = e0; }
+    }
+    return { kind: "rect", cx, cy, halfW, halfH, r, ratio: bestErr / tol };
+  }
+
+  function reconFitThinBar(points, tolMul) {
+    let cx = 0, cy = 0;
+    for (const p of points) { cx += p.x; cy += p.y; }
+    cx /= points.length;
+    cy /= points.length;
+    let sxx = 0, syy = 0, sxy = 0;
+    for (const p of points) {
+      const dx = p.x - cx, dy = p.y - cy;
+      sxx += dx * dx; syy += dy * dy; sxy += dx * dy;
+    }
+    const theta = Math.abs(sxy) < 1e-9 && Math.abs(sxx - syy) < 1e-9 ? 0 : 0.5 * Math.atan2(2 * sxy, sxx - syy);
+    const ct = Math.cos(theta), st = Math.sin(theta);
+    let minU = Infinity, maxU = -Infinity, minV = Infinity, maxV = -Infinity;
+    const rot = points.map((p) => {
+      const dx = p.x - cx, dy = p.y - cy;
+      const u = dx * ct + dy * st, v = -dx * st + dy * ct;
+      if (u < minU) minU = u;
+      if (u > maxU) maxU = u;
+      if (v < minV) minV = v;
+      if (v > maxV) maxV = v;
+      return { x: u, y: v };
+    });
+    const halfLong = (maxU - minU) / 2, halfShort = (maxV - minV) / 2;
+    if (halfLong < 1.5 || halfShort < 0.35 || halfShort > halfLong * PRIMITIVE_FIT.elongationRatio) return null;
+    const midU = (minU + maxU) / 2, midV = (minV + maxV) / 2;
+    const local = rot.map((p) => ({ x: p.x - midU, y: p.y - midV }));
+    const err = reconRectError(local, halfLong, halfShort, 0, new Float32Array(local.length));
+    // A thin line has to stay tight to its OWN width: a flat tolerance would let a long shallow arc pass
+    // as a straight bar.
+    const tol = Math.min(Math.max(PRIMITIVE_FIT.rectRelTol * halfLong, PRIMITIVE_FIT.rectAbsFloor) * tolMul, 0.9 * halfShort + 1.0);
+    if (err > tol) return null;
+    return {
+      kind: "wideline",
+      cx: cx + midU * ct - midV * st,
+      cy: cy + midU * st + midV * ct,
+      ux: ct, uy: st, halfLong, halfShort,
+      ratio: err / tol,
+    };
+  }
+
+  // Among the fits that pass, prefer ellipse, then bar, then rounded rect - unless a later one fits
+  // clearly better (so a squarish rounded rect is not swallowed by the ellipse test).
+  function reconPickFit(cands) {
+    const live = cands.filter(Boolean);
+    if (!live.length) return null;
+    const best = Math.min(...live.map((c) => c.ratio));
+    return live.find((c) => c.ratio <= best * 1.25 + 0.04) || null;
+  }
+  function reconChoosePrimitive(points, params) {
+    if (!points || points.length < 8) return null;
+    return reconPickFit([
+      reconFitEllipse(points, params.tolMul),
+      reconFitThinBar(points, params.tolMul),
+      reconFitRoundedRect(points, params.tolMul, params.cornerSnap),
+    ]);
+  }
+  function reconChooseStrokeable(points, params) {
+    if (!points || points.length < 8) return null;
+    return reconPickFit([
+      reconFitEllipse(points, params.tolMul),
+      reconFitRoundedRect(points, params.tolMul, params.cornerSnap),
+    ]);
+  }
+
+  // Two contours that fit the SAME primitive, concentric, with an even gap = one native stroke.
+  function reconRingFit(outerPts, innerPts, params) {
+    if (!params.strokeTolMul) return null;
+    const o = reconChooseStrokeable(outerPts, params), i = reconChooseStrokeable(innerPts, params);
+    if (!o || !i || o.kind !== i.kind) return null;
+    let dA, dB, mid;
+    if (o.kind === "ellipse") {
+      dA = o.rx - i.rx;
+      dB = o.ry - i.ry;
+      mid = { kind: "ellipse", cx: (o.cx + i.cx) / 2, cy: (o.cy + i.cy) / 2, rx: (o.rx + i.rx) / 2, ry: (o.ry + i.ry) / 2 };
+    } else {
+      dA = o.halfW - i.halfW;
+      dB = o.halfH - i.halfH;
+      mid = { kind: "rect", cx: (o.cx + i.cx) / 2, cy: (o.cy + i.cy) / 2, halfW: (o.halfW + i.halfW) / 2, halfH: (o.halfH + i.halfH) / 2, r: 0 };
+    }
+    if (dA < 0.8 || dB < 0.8) return null;
+    if (Math.abs(dA - dB) > PRIMITIVE_FIT.ringGapRelTol * params.strokeTolMul * Math.max(dA, dB) + 0.7) return null;
+    if (Math.hypot(o.cx - i.cx, o.cy - i.cy) > 0.6 * Math.max(dA, dB) + 1.0) return null;
+    mid.strokeWidth = (dA + dB) / 2;
+    if (o.kind === "rect") mid.r = Math.max(0, o.r - mid.strokeWidth / 2);
+    mid.inner = i;
+    return mid;
+  }
+
+  /* ---------- 5. fallback path: simplify, keep real corners, smooth the rest ---------- */
+
+  // Turn angle (degrees) at dense[idx], measured over ~d px of contour on each side - so a long gentle
+  // curve reads as smooth however coarsely it was simplified, and a real corner reads as sharp.
+  function reconTurnAngle(dense, idx, d) {
+    const n = dense.length;
+    const V = dense[idx];
+    let j = idx, acc = 0, guard = 0;
+    while (acc < d && guard++ < n) {
+      const k = (j + 1) % n;
+      acc += Math.hypot(dense[k].x - dense[j].x, dense[k].y - dense[j].y);
+      j = k;
+    }
+    const A = dense[j];
+    j = idx; acc = 0; guard = 0;
+    while (acc < d && guard++ < n) {
+      const k = (j - 1 + n) % n;
+      acc += Math.hypot(dense[k].x - dense[j].x, dense[k].y - dense[j].y);
+      j = k;
+    }
+    const B = dense[j];
+    const v1x = V.x - B.x, v1y = V.y - B.y, v2x = A.x - V.x, v2y = A.y - V.y;
+    const l1 = Math.hypot(v1x, v1y), l2 = Math.hypot(v2x, v2y);
+    if (l1 < 1e-6 || l2 < 1e-6) return 0;
+    return (Math.acos(reconClamp((v1x * v2x + v1y * v2y) / (l1 * l2), -1, 1)) * 180) / Math.PI;
+  }
+
+  // One closed contour -> {pts, isCorner}. Winding is normalised (outer positive, hole negative) so
+  // filled areas and holes cut correctly under the default nonzero fill rule.
+  function reconSimplifyContour(dense, isHole, params) {
+    let pts = dense;
+    const area = polygonArea(pts);
+    if ((!isHole && area < 0) || (isHole && area > 0)) pts = pts.slice().reverse();
+    const simp = simplifyClosedPolygon(pts, params.rdpTol);
+    const idxOf = new Map();
+    pts.forEach((p, i) => idxOf.set(p, i));
+    const dBase = reconClamp(2.2 * params.rdpTol + 1.5, 2, 14);
+    const isCorner = simp.map((p, i) => {
+      const prev = simp[(i - 1 + simp.length) % simp.length], next = simp[(i + 1) % simp.length];
+      const minEdge = Math.min(Math.hypot(p.x - prev.x, p.y - prev.y), Math.hypot(next.x - p.x, next.y - p.y));
+      const d = reconClamp(0.5 * minEdge, 1.2, dBase);
+      const di = idxOf.get(p);
+      return di === undefined ? true : reconTurnAngle(pts, di, d) > params.cornerDeg;
+    });
+    return { pts: simp, isCorner };
+  }
+
+  function reconSmoothSubpath(pts, isCorner, strength) {
+    const n = pts.length;
+    const segs = [{ t: "M", x: pts[0].x, y: pts[0].y }];
+    let curves = 0;
+    for (let i = 0; i < n; i++) {
+      const p1 = pts[i], p2 = pts[(i + 1) % n];
+      const k1 = isCorner[i], k2 = isCorner[(i + 1) % n];
+      if (strength <= 0 || (k1 && k2) || n < 3) { segs.push({ t: "L", x: p2.x, y: p2.y }); continue; }
+      const p0 = pts[(i - 1 + n) % n], p3 = pts[(i + 2) % n];
+      const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const cap = 0.45 * len;
+      const clampVec = (vx, vy) => { const l = Math.hypot(vx, vy); return l > cap && l > 0 ? [(vx * cap) / l, (vy * cap) / l] : [vx, vy]; };
+      const st1 = [(p2.x - p1.x) / 3, (p2.y - p1.y) / 3];
+      const st2 = [(p1.x - p2.x) / 3, (p1.y - p2.y) / 3];
+      const cr1 = k1 ? st1 : clampVec((p2.x - p0.x) / 6, (p2.y - p0.y) / 6);
+      const cr2 = k2 ? st2 : clampVec((p1.x - p3.x) / 6, (p1.y - p3.y) / 6);
+      const h1 = [st1[0] + (cr1[0] - st1[0]) * strength, st1[1] + (cr1[1] - st1[1]) * strength];
+      const h2 = [st2[0] + (cr2[0] - st2[0]) * strength, st2[1] + (cr2[1] - st2[1]) * strength];
+      const c1 = { x: p1.x + h1[0], y: p1.y + h1[1] }, c2 = { x: p2.x + h2[0], y: p2.y + h2[1] };
+      if (perpendicularDistance(c1, p1, p2) < 0.03 && perpendicularDistance(c2, p1, p2) < 0.03) {
+        segs.push({ t: "L", x: p2.x, y: p2.y });
+      } else {
+        segs.push({ t: "C", x1: c1.x, y1: c1.y, x2: c2.x, y2: c2.y, x: p2.x, y: p2.y });
+        curves++;
+      }
+    }
+    segs.push({ t: "Z" });
+    return { segs, curves };
+  }
+
+  /* ---------- emission helpers ---------- */
+
+  function reconHex(rgb) { return `#${toHex2(rgb[0])}${toHex2(rgb[1])}${toHex2(rgb[2])}`; }
+  function reconPaint(hex, alpha, attr) {
+    let s = `${attr}="${hex}"`;
+    if (alpha < 0.985) s += ` ${attr}-opacity="${reconFmt(Math.max(0.02, alpha))}"`;
+    return s;
+  }
+
+  function reconSegsToD(subpaths, X, Y) {
+    let d = "";
+    for (const segs of subpaths) {
+      for (const s of segs) {
+        if (s.t === "M") d += `M${reconFmt(X(s.x))} ${reconFmt(Y(s.y))}`;
+        else if (s.t === "L") d += `L${reconFmt(X(s.x))} ${reconFmt(Y(s.y))}`;
+        else if (s.t === "C") d += `C${reconFmt(X(s.x1))} ${reconFmt(Y(s.y1))} ${reconFmt(X(s.x2))} ${reconFmt(Y(s.y2))} ${reconFmt(X(s.x))} ${reconFmt(Y(s.y))}`;
+        else d += "Z";
+      }
+    }
+    return d;
+  }
+
+  // Geometry (tag + attributes) for a fitted primitive, in output units. `g` grows it a little (in analysis px).
+  function reconPrimitiveGeom(p, g, X, Y, sx, sy) {
+    if (p.kind === "ellipse") {
+      const rx = (p.rx + g) * sx, ry = (p.ry + g) * sy;
+      if (Math.abs(rx - ry) <= 0.02 * Math.max(rx, ry)) {
+        return { tag: "circle", attrs: `cx="${reconFmt(X(p.cx))}" cy="${reconFmt(Y(p.cy))}" r="${reconFmt((rx + ry) / 2)}"` };
+      }
+      return { tag: "ellipse", attrs: `cx="${reconFmt(X(p.cx))}" cy="${reconFmt(Y(p.cy))}" rx="${reconFmt(rx)}" ry="${reconFmt(ry)}"` };
+    }
+    if (p.kind === "rect") {
+      const hw = p.halfW + g, hh = p.halfH + g;
+      const r = p.r > 0 ? p.r + g : 0;
+      let a = `x="${reconFmt(X(p.cx - hw))}" y="${reconFmt(Y(p.cy - hh))}" width="${reconFmt(2 * hw * sx)}" height="${reconFmt(2 * hh * sy)}"`;
+      if (r > 0) a += Math.abs(sx - sy) < 1e-3 ? ` rx="${reconFmt(r * sx)}"` : ` rx="${reconFmt(r * sx)}" ry="${reconFmt(r * sy)}"`;
+      return { tag: "rect", attrs: a };
+    }
+    // wideline: an exact 4-corner polygon at the fitted angle
+    const hl = p.halfLong + g, hs = p.halfShort + g;
+    const nx = -p.uy, ny = p.ux;
+    const c = [
+      [p.cx - p.ux * hl + nx * hs, p.cy - p.uy * hl + ny * hs],
+      [p.cx + p.ux * hl + nx * hs, p.cy + p.uy * hl + ny * hs],
+      [p.cx + p.ux * hl - nx * hs, p.cy + p.uy * hl - ny * hs],
+      [p.cx - p.ux * hl - nx * hs, p.cy - p.uy * hl - ny * hs],
+    ];
+    return { tag: "polygon", attrs: `points="${c.map((q) => `${reconFmt(X(q[0]))},${reconFmt(Y(q[1]))}`).join(" ")}"` };
+  }
+
+  function reconEmptyResult(w, h, warnings) {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"></svg>`;
+    return {
+      cleanSvg: svg, detectedSvg: svg, width: w, height: h, warnings,
+      stats: { shapes: 0, native: 0, paths: 0, anchors: 0, kinds: { ellipse: 0, rect: 0, roundrect: 0, wideline: 0, border: 0, polygon: 0, curve: 0 }, colors: 0 },
+    };
+  }
+
+  /* ---------- the whole pipeline ---------- */
+
+  // source = {cw, ch, data: ImageData, naturalWidth, naturalHeight} (reconLoadSource's result).
+  function reconstructFromImageData(source, userOpts) {
+    const t0 = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const cw = source.cw, ch = source.ch, px = source.data.data;
+    const outW = source.naturalWidth || cw, outH = source.naturalHeight || ch;
+    const sx = outW / cw, sy = outH / ch;
+    const X = (x) => (x + 0.5) * sx, Y = (y) => (y + 0.5) * sy;
+    const n = cw * ch;
+    const params = reconResolveParams(userOpts, cw, ch);
+    const warnings = [];
+
+    const palette = reconBuildPalette(px, n, params);
+    if (!palette.length) return reconEmptyResult(outW, outH, ["Gambar tidak punya piksel yang terlihat (semuanya transparan)."]);
+    const T = palette.length;
+    let labels = reconLabelPixels(px, n, palette);
+    labels = reconFilterLabels(labels, cw, ch, T + 1, params.filterRadius, params.filterKeep);
+    labels = reconMergeSmallRegions(labels, cw, ch, params.minBlobArea);
+    const { ids, regions } = reconLabelRegions(labels, cw, ch);
+
+    let compIds = [];
+    for (let i = 0; i < regions.length; i++) if (regions[i].label !== T && regions[i].area >= 2) compIds.push(i);
+    if (compIds.length > RECON_MAX_COMPONENTS) {
+      compIds.sort((a, b) => regions[b].area - regions[a].area);
+      compIds = compIds.slice(0, RECON_MAX_COMPONENTS);
+      warnings.push(`Gambar terlalu detail untuk rekonstruksi bentuk (${regions.length} area). Hanya ${RECON_MAX_COMPONENTS} area terbesar yang dipakai - naikkan Color Simplification / Noise Removal, atau pakai mode Image Tracing.`);
+    }
+    const holeMin = Math.max(3, params.minBlobArea);
+    const comps = compIds.map((id) => reconAnalyzeComponent(ids, px, cw, regions, id, T, holeMin));
+    const byId = new Map(comps.map((c) => [c.id, c]));
+
+    // Which components touch which (4-neighbour contact) - decides where a seam overlap is worth adding.
+    const R = regions.length;
+    const touching = new Set();
+    for (let y = 0; y < ch; y++) {
+      for (let x = 0; x < cw; x++) {
+        const p = y * cw + x, a = ids[p];
+        if (x + 1 < cw) { const b = ids[p + 1]; if (a !== b) touching.add(a < b ? a * R + b : b * R + a); }
+        if (y + 1 < ch) { const b = ids[p + cw]; if (a !== b) touching.add(a < b ? a * R + b : b * R + a); }
+      }
+    }
+    for (const key of touching) {
+      const a = Math.floor(key / R), b = key % R;
+      const ca = byId.get(a), cb = byId.get(b);
+      if (ca && cb) { ca.nbrs.add(b); cb.nbrs.add(a); }
+    }
+    const hasSibling = (c) => {
+      for (const nid of c.nbrs) {
+        const o = byId.get(nid);
+        if (!c.desc.has(nid) && !(o && o.desc.has(c.id))) return true;
+      }
+      return false;
+    };
+
+    comps.sort((a, b) => b.solidArea - a.solidArea); // back-to-front: a shape's parent always precedes it
+    const shapes = [];
+
+    const primitiveShape = (comp, prim, grow) => {
+      const g = reconPrimitiveGeom(prim, grow, X, Y, sx, sy);
+      const kind = prim.kind === "rect" ? (prim.r > 0 ? "roundrect" : "rect") : prim.kind;
+      return { kind, native: true, tag: g.tag, geom: g.attrs, style: `${reconPaint(reconHex(comp.color), comp.alpha, "fill")}`, anchors: [], overlayTag: g.tag, overlayGeom: g.attrs, fillHex: reconHex(comp.color) };
+    };
+    const strokedShape = (prim, fillComp, strokeComp) => {
+      const strokeW = prim.strokeWidth * (sx + sy) / 2;
+      const g = reconPrimitiveGeom(prim, 0, X, Y, sx, sy);
+      const fill = fillComp ? reconPaint(reconHex(fillComp.color), fillComp.alpha, "fill") : 'fill="none"';
+      const stroke = `${reconPaint(reconHex(strokeComp.color), strokeComp.alpha, "stroke")} stroke-width="${reconFmt(strokeW)}"`;
+      return { kind: "border", native: true, tag: g.tag, geom: g.attrs, style: `${fill} ${stroke}`, anchors: [], overlayTag: g.tag, overlayGeom: g.attrs, fillHex: reconHex(strokeComp.color) };
+    };
+    const pathShape = (comp, contours, grow) => {
+      const subpaths = [];
+      let anchors = 0, curves = 0, corners = 0, verts = 0;
+      const anchorPts = [];
+      for (const c of contours) {
+        if (!c.pts || c.pts.length < 4) continue;
+        const s = reconSimplifyContour(c.pts, c.hole, params);
+        if (s.pts.length < 3) continue;
+        let pts = s.pts;
+        if (grow > 0 && !c.hole) pts = offsetClosedPolygon(pts, grow, polygonArea(pts) > 0 ? -1 : 1);
+        const sm = reconSmoothSubpath(pts, s.isCorner, params.smooth);
+        subpaths.push(sm.segs);
+        curves += sm.curves;
+        verts += pts.length;
+        corners += s.isCorner.filter(Boolean).length;
+        for (const sg of sm.segs) if (sg.t !== "Z") anchorPts.push({ x: X(sg.x), y: Y(sg.y) });
+        anchors += pts.length;
+      }
+      if (!subpaths.length) return null;
+      const d = reconSegsToD(subpaths, X, Y);
+      const kind = curves === 0 && corners >= verts * 0.8 ? "polygon" : "curve";
+      return { kind, native: false, tag: "path", geom: `d="${d}"`, style: reconPaint(reconHex(comp.color), comp.alpha, "fill"), anchors: anchorPts, anchorCount: anchors, overlayTag: "path", overlayGeom: `d="${d}"`, fillHex: reconHex(comp.color) };
+    };
+
+    for (const comp of comps) {
+      if (comp.consumed || !comp.outer || comp.outer.length < 4) continue;
+      const grow = hasSibling(comp) ? params.seamPx : 0;
+      const real = comp.holes.filter((h) => h.real);
+      let shape = null;
+
+      if (comp.multi) {
+        shape = pathShape(comp, comp.outerContours.map((c) => ({ pts: c.map((p) => ({ x: p.x + comp.ox, y: p.y + comp.oy })), hole: false })), grow);
+      } else if (!real.length) {
+        // A frame around a single, exactly-filling child (a "box with a border") is one native shape
+        // with a stroke - not two stacked ones.
+        if (params.strokeTolMul && comp.holes.length === 1) {
+          const hole = comp.holes[0];
+          const hc = reconHoleContour(comp, hole);
+          let child = null, childCount = 0;
+          for (const [kid, cnt] of hole.kids) if (cnt > childCount && byId.has(kid)) { child = byId.get(kid); childCount = cnt; }
+          if (hc && child && !child.consumed && child.outer && !child.multi && !child.holes.some((h) => h.real)) {
+            const ring = reconRingFit(comp.outer, hc, params);
+            const cprim = ring && reconChoosePrimitive(child.outer, params);
+            const ratio = child.solidArea / Math.max(1, hole.area);
+            if (ring && cprim && cprim.kind !== "wideline" && (cprim.kind === "ellipse") === (ring.kind === "ellipse") && ratio > 0.75 && ratio < 1.3) {
+              const tolPx = 0.5 * ring.strokeWidth + 1.5;
+              const inner = ring.inner;
+              const fits = ring.kind === "ellipse"
+                ? Math.hypot(cprim.cx - inner.cx, cprim.cy - inner.cy) <= tolPx && Math.abs(cprim.rx - inner.rx) <= tolPx && Math.abs(cprim.ry - inner.ry) <= tolPx
+                : Math.hypot(cprim.cx - inner.cx, cprim.cy - inner.cy) <= tolPx && Math.abs(cprim.halfW - inner.halfW) <= tolPx && Math.abs(cprim.halfH - inner.halfH) <= tolPx;
+              if (fits) {
+                shape = strokedShape(ring, child, comp);
+                child.consumed = true;
+              }
+            }
+          }
+        }
+        if (!shape) {
+          const prim = reconChoosePrimitive(comp.outer, params);
+          shape = prim ? primitiveShape(comp, prim, grow > 0 ? grow * 0.5 : 0) : pathShape(comp, [{ pts: comp.outer, hole: false }], grow);
+        }
+      } else if (real.length === 1 && comp.holes.length === 1) {
+        const hc = reconHoleContour(comp, real[0]);
+        const ring = hc ? reconRingFit(comp.outer, hc, params) : null;
+        shape = ring ? strokedShape(ring, null, comp) : pathShape(comp, [{ pts: comp.outer, hole: false }, { pts: hc, hole: true }], grow);
+      } else {
+        const contours = [{ pts: comp.outer, hole: false }];
+        for (const h of real) { const hc = reconHoleContour(comp, h); if (hc) contours.push({ pts: hc, hole: true }); }
+        shape = pathShape(comp, contours, grow);
+      }
+      if (shape) shapes.push(shape);
+    }
+
+    /* ---------- assemble the two SVG views + stats ---------- */
+    const kinds = { ellipse: 0, rect: 0, roundrect: 0, wideline: 0, border: 0, polygon: 0, curve: 0 };
+    let native = 0, paths = 0, anchors = 0;
+    let clean = "", detected = "", overlay = "";
+    const sw = reconFmt(Math.max(1, Math.max(outW, outH) / 260));
+    const dot = Math.max(1.4, Math.max(outW, outH) / 220);
+    for (const s of shapes) {
+      kinds[s.kind]++;
+      if (s.native) native++; else { paths++; anchors += s.anchorCount; }
+      clean += `<${s.tag} ${s.geom} ${s.style}/>`;
+      detected += `<${s.tag} ${s.geom} ${s.style} opacity="0.6"/>`;
+      const kc = RECON_KIND_COLORS[s.kind];
+      overlay += `<${s.overlayTag} ${s.overlayGeom} fill="none" stroke="${kc}" stroke-width="${sw}" stroke-linejoin="round"${s.native ? ' stroke-dasharray="' + sw * 3 + ' ' + sw * 2 + '"' : ""}/>`;
+      for (const a of s.anchors) {
+        overlay += `<rect x="${reconFmt(a.x - dot / 2)}" y="${reconFmt(a.y - dot / 2)}" width="${reconFmt(dot)}" height="${reconFmt(dot)}" fill="#fff" stroke="#0B0B0C" stroke-width="${reconFmt(dot / 4)}"/>`;
+      }
+    }
+    const head = `<svg xmlns="http://www.w3.org/2000/svg" width="${outW}" height="${outH}" viewBox="0 0 ${outW} ${outH}">`;
+    if (!shapes.length) warnings.push("Tidak ada bentuk yang bisa direkonstruksi dari gambar ini.");
+    return {
+      cleanSvg: `${head}${clean}</svg>`,
+      detectedSvg: `${head}${detected}${overlay}</svg>`,
+      width: outW,
+      height: outH,
+      warnings,
+      stats: {
+        shapes: shapes.length, native, paths, anchors, kinds, colors: palette.length,
+        ms: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - t0),
+      },
+    };
+  }
+
+  function buildProjectXML(shapes, textLayers, settings) {
     const {
       title = "SVG Import",
       width = 1080,
@@ -3079,6 +4709,7 @@ const AMEngine = (() => {
       fps = 30,
       totalTimeMs = 3000,
       bgcolor = "#00000000",
+      nativeShapes = true,
     } = settings;
 
     const now = Date.now();
@@ -3097,28 +4728,91 @@ const AMEngine = (() => {
       `am="com.alightcreative.motion/5.0.273.1028425" amplatform="android" ` +
       `retime="off" retimeAdaptFPS="false"`;
 
-    let body = "";
-    for (const shape of shapes) {
-      const id = nextId();
-      const a = toHex2(shape.fill.a * 255);
-      const r = toHex2(shape.fill.r);
-      const g = toHex2(shape.fill.g);
-      const b = toHex2(shape.fill.b);
-      const fillHex = `#${a}${r}${g}${b}`;
-      const d = serializeSubpaths(shape.subpaths);
-      const locX = fmtFixed6(shape.center.x);
-      const locY = fmtFixed6(shape.center.y);
+    const fillHexOf = (rgba) => `#${toHex2(rgba.a * 255)}${toHex2(rgba.r)}${toHex2(rgba.g)}${toHex2(rgba.b)}`;
+    const planned = nativeShapes ? planPrimitiveShapes(shapes) : shapes.map((shape) => ({ shape, primitive: null }));
 
+    let body = "";
+    for (const entry of planned) {
+      const shape = entry.shape;
+      const primitive = entry.primitive;
+      const id = nextId();
+      const locX = fmtFixed6(shape.center.x + (primitive ? primitive.localCenter.x : 0));
+      const locY = fmtFixed6(shape.center.y + (primitive ? primitive.localCenter.y : 0));
+      const endTime = Math.round(totalTimeMs);
+
+      // ---- native rect / roundrect / circle ----
+      if (primitive && (primitive.kind === "ellipse" || primitive.kind === "rect")) {
+        const slug = primitive.kind === "ellipse" ? "circle" : primitive.r > 0 ? "roundrect" : "rect";
+        const fillHex = fillHexOf(primitive.strokeOnly ? { ...shape.fill, a: 0 } : shape.fill);
+        const border = primitive.border || (primitive.strokeOnly ? { color: shape.fill, width: primitive.strokeWidth } : null);
+        const sizeProp =
+          primitive.kind === "ellipse"
+            ? `${fmtFixed6(primitive.rx)},${fmtFixed6(primitive.ry)}`
+            : `${fmtFixed6(primitive.halfW)},${fmtFixed6(primitive.halfH)}`;
+        body +=
+          `  <shape id="${id}" label="${xmlEscape(shape.label)}" startTime="0" endTime="${endTime}" ` +
+          `fillType="color" mediaFillMode="fill" s=".${slug}">\n` +
+          `    <transform>\n      <location value="${locX},${locY},0.000000"/>\n    </transform>\n` +
+          `    <fillColor value="${fillHex}"/>\n` +
+          `    <property name="size" type="vec2" value="${sizeProp}"/>\n` +
+          (primitive.kind === "rect" && primitive.r > 0
+            ? `    <property name="cornerRadius" type="float" value="${fmtFixed6(primitive.r)}"/>\n`
+            : "") +
+          (border ? `    <border direction="centered" color="${fillHexOf(border.color)}" size="${fmtFixed6(border.width)}"/>\n` : "") +
+          `  </shape>\n`;
+        continue;
+      }
+
+      // ---- native wide line (thin/elongated fill, any angle) ----
+      if (primitive && primitive.kind === "wideline") {
+        body +=
+          `  <shape id="${id}" label="${xmlEscape(shape.label)}" startTime="0" endTime="${endTime}" ` +
+          `fillType="color" mediaFillMode="fill" s=".wideline">\n` +
+          `    <transform>\n      <location value="${locX},${locY},0.000000"/>\n    </transform>\n` +
+          `    <fillColor value="${fillHexOf(shape.fill)}"/>\n` +
+          `    <property name="start" type="vec2" value="${fmtFixed6(primitive.start.x)},${fmtFixed6(primitive.start.y)}"/>\n` +
+          `    <property name="end" type="vec2" value="${fmtFixed6(primitive.end.x)},${fmtFixed6(primitive.end.y)}"/>\n` +
+          `    <property name="lineWidth" type="float" value="${fmtFixed6(primitive.lineWidth)}"/>\n` +
+          `  </shape>\n`;
+        continue;
+      }
+
+      // ---- fallback: generic path shape (unchanged from before) ----
+      const d = serializeSubpaths(shape.subpaths);
       body +=
-        `  <shape id="${id}" label="${xmlEscape(shape.label)}" startTime="0" endTime="${Math.round(
-          totalTimeMs
-        )}" fillType="color" mediaFillMode="fill">\n` +
+        `  <shape id="${id}" label="${xmlEscape(shape.label)}" startTime="0" endTime="${endTime}" fillType="color" mediaFillMode="fill">\n` +
         `    <transform>\n` +
         `      <location value="${locX},${locY},0.000000"/>\n` +
         `    </transform>\n` +
-        `    <fillColor value="${fillHex}"/>\n` +
+        `    <fillColor value="${fillHexOf(shape.fill)}"/>\n` +
         `    <path d="${xmlEscape(d)}"/>\n` +
         `  </shape>\n`;
+    }
+
+    // ---- native text layer, from OCR (see AMEngine.recognizeImageText) ----
+    // BEST-EFFORT / UNVERIFIED. Every <shape> tag above - the s=".rect"/.roundrect/.circle/
+    // .wideline templates, every <property> name - was reverse-engineered by diffing real
+    // exports out of the Alight Motion app itself (see the big comment above
+    // "Native AM shape detection"). There was nothing to diff for a text layer: no prior Jalur
+    // output ever produced one, so what follows is a same-family guess only - same id/label/
+    // startTime/endTime/<transform>/<fillColor> conventions as <shape>, plus a <property> per
+    // text-specific field, on the assumption AM's own layer types share one XML schema. Import
+    // this against the real app before relying on it; if a tag/attribute name is wrong or gets
+    // silently dropped, the fix belongs only in this one loop - nothing else reads `textLayers`.
+    for (const t of (textLayers || [])) {
+      const id = nextId();
+      const locX = fmtFixed6(t.center.x);
+      const locY = fmtFixed6(t.center.y);
+      const endTime = Math.round(totalTimeMs);
+      body +=
+        `  <text id="${id}" label="${xmlEscape(t.label)}" startTime="0" endTime="${endTime}" fillType="color" mediaFillMode="fill">\n` +
+        `    <transform>\n      <location value="${locX},${locY},0.000000"/>\n    </transform>\n` +
+        `    <fillColor value="${fillHexOf(t.fill)}"/>\n` +
+        `    <property name="text" type="string" value="${xmlEscape(t.text)}"/>\n` +
+        `    <property name="fontSize" type="float" value="${fmtFixed6(t.fontSize)}"/>\n` +
+        `    <property name="textAlign" type="string" value="center"/>\n` +
+        `    <property name="size" type="vec2" value="${fmtFixed6(t.halfW)},${fmtFixed6(t.halfH)}"/>\n` +
+        `  </text>\n`;
     }
 
     return `${header}<scene ${sceneAttrs}>\n${body}</scene>\n`;
@@ -3149,12 +4843,342 @@ const AMEngine = (() => {
     extractShapes,
     serializeSubpaths,
     buildProjectXML,
+    reconLoadSource,
+    reconstructFromImageData,
+    RECON_DEFAULTS,
+    RECON_KIND_COLORS,
   };
 })();
 
 if (typeof module !== "undefined") module.exports = AMEngine;
 
 
+</script>
+
+<script>
+/* ===================== SampleArt: built-in complex demo SVG =====================
+   Procedurally generated (not hand-drawn) so it's always precise and well-formed — a
+   layered floral mandala used by the 'Muat contoh rumit' button below. Namespaced
+   exactly like AMEngine above; nothing here touches AMEngine's internals. */
+const SampleArt = (() => {
+  // ============================================================
+  // mandala.js — procedurally generates an intricate, clean sample
+  // SVG (a layered floral mandala) used as the built-in demo image.
+  // Generated mathematically so every curve is precise and every
+  // ring is perfectly symmetric — "rumit" (intricate) in content,
+  // "rapi" (clean) by construction.
+  // ============================================================
+  
+  function num(n) { return (Math.round(n * 100) / 100).toString(); }
+  
+  function rot(x, y, cx, cy, deg) {
+    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const dx = x - cx, dy = y - cy;
+    return { x: cx + dx * c - dy * s, y: cy + dx * s + dy * c };
+  }
+  
+  // One symmetric petal, tip pointing along +x from the center, then rotated
+  // into place. rIn/rOut = inner/outer radius, halfWidth = max bulge, bulgeT =
+  // where along the length the bulge peaks (0-1), curveKind picks a silhouette.
+  function petalPath(cx, cy, angleDeg, rIn, rOut, halfWidth, bulgeT) {
+    const base = { x: cx + rIn, y: cy };
+    const tip = { x: cx + rOut, y: cy };
+    const bx = cx + rIn + (rOut - rIn) * bulgeT;
+    const topC1 = { x: cx + rIn + (rOut - rIn) * 0.22, y: cy + halfWidth * 0.75 };
+    const topC2 = { x: bx, y: cy + halfWidth };
+    const topC3 = { x: cx + rIn + (rOut - rIn) * (bulgeT + (1 - bulgeT) * 0.5), y: cy + halfWidth * 0.4 };
+    const botC1 = { x: topC3.x, y: cy - halfWidth * 0.4 };
+    const botC2 = { x: bx, y: cy - halfWidth };
+    const botC3 = { x: topC1.x, y: cy - halfWidth * 0.75 };
+  
+    const pts = [base, topC1, topC2, tip, topC3, tip, botC1, botC2, base, botC3];
+    // rotate every point about (cx,cy) by angleDeg
+    const R = p => rot(p.x, p.y, cx, cy, angleDeg);
+    const [b, t1, t2, tp, midOut1, tp2, b1, b2, be, midOut2] = pts.map(R);
+  
+    return `M${num(b.x)},${num(b.y)} C${num(t1.x)},${num(t1.y)} ${num(t2.x)},${num(t2.y)} ${num(tp.x)},${num(tp.y)} `
+      + `C${num(midOut1.x)},${num(midOut1.y)} ${num(b1.x)},${num(b1.y)} ${num(be.x)},${num(be.y)} Z`;
+  }
+  
+  // A ring of `count` petals evenly spaced, alternating two fill colors.
+  function petalRing({ cx, cy, count, rIn, rOut, halfWidth, bulgeT, colors, opacity, startOffset }) {
+    let out = '';
+    for (let i = 0; i < count; i++) {
+      const angle = startOffset + (360 / count) * i;
+      const d = petalPath(cx, cy, angle, rIn, rOut, halfWidth, bulgeT);
+      const fill = colors[i % colors.length];
+      out += `    <path d="${d}" fill="${fill}"${opacity !== undefined ? ` fill-opacity="${opacity}"` : ''}/>\n`;
+    }
+    return out;
+  }
+  
+  // Scalloped border ring built from repeated small cubic "bumps" — a single
+  // continuous path, good stress test for many-segment simplification.
+  function scallopRing(cx, cy, r, bumps, bumpDepth) {
+    let d = '';
+    const step = 360 / bumps;
+    for (let i = 0; i <= bumps; i++) {
+      const a0 = i * step;
+      const p0 = rot(cx + r, cy, cx, cy, a0);
+      if (i === 0) { d += `M${num(p0.x)},${num(p0.y)} `; continue; }
+      const aMid = a0 - step / 2;
+      const pMid = rot(cx + r + bumpDepth, cy, cx, cy, aMid);
+      const c1 = rot(cx + r + bumpDepth * 0.9, cy, cx, cy, a0 - step * 0.75);
+      const c2 = rot(cx + r + bumpDepth * 0.9, cy, cx, cy, a0 - step * 0.25);
+      d += `C${num(c1.x)},${num(c1.y)} ${num(pMid.x)},${num(pMid.y)} ${num(pMid.x)},${num(pMid.y)} `;
+      d += `C${num(c2.x)},${num(c2.y)} ${num(p0.x)},${num(p0.y)} ${num(p0.x)},${num(p0.y)} `;
+    }
+    return d + 'Z';
+  }
+  
+  // Center burst: alternating-radius star polygon via straight lines.
+  function starPath(cx, cy, points, rOuter, rInner) {
+    let d = '';
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? rOuter : rInner;
+      const a = (360 / (points * 2)) * i - 90;
+      const p = rot(cx + r, cy, cx, cy, a);
+      d += (i === 0 ? 'M' : 'L') + num(p.x) + ',' + num(p.y) + ' ';
+    }
+    return d + 'Z';
+  }
+  
+  function generateMandalaSVG() {
+    const cx = 200, cy = 200;
+    const palette = {
+      ring1: ['#E8983E', '#C9622F'],
+      ring2: ['#7B3F8F', '#A35CC1'],
+      ring3: ['#2E7D74', '#45A594'],
+      ring4: ['#C9622F', '#E8983E', '#A35CC1'],
+      center: '#F4C563',
+      scallop: '#1F2530'
+    };
+  
+    let body = '';
+    body += `  <circle cx="${cx}" cy="${cy}" r="188" fill="none" stroke="${palette.scallop}" stroke-width="1.5" opacity="0.35"/>\n`;
+    body += `  <path d="${scallopRing(cx, cy, 178, 60, 6)}" fill="${palette.scallop}" opacity="0.9"/>\n`;
+  
+    body += `  <g transform="rotate(7 ${cx} ${cy})">\n`;
+    body += petalRing({ cx, cy, count: 24, rIn: 96, rOut: 172, halfWidth: 16, bulgeT: 0.38, colors: palette.ring4, startOffset: 0 });
+    body += `  </g>\n`;
+  
+    body += `  <g>\n`;
+    body += petalRing({ cx, cy, count: 16, rIn: 60, rOut: 132, halfWidth: 22, bulgeT: 0.42, colors: palette.ring1, startOffset: 11.25 });
+    body += `  </g>\n`;
+  
+    body += `  <g transform="rotate(-9 ${cx} ${cy})">\n`;
+    body += petalRing({ cx, cy, count: 12, rIn: 34, rOut: 92, halfWidth: 20, bulgeT: 0.46, colors: palette.ring2, opacity: 0.92, startOffset: 0 });
+    body += `  </g>\n`;
+  
+    body += `  <g>\n`;
+    body += petalRing({ cx, cy, count: 8, rIn: 14, rOut: 54, halfWidth: 16, bulgeT: 0.5, colors: palette.ring3, startOffset: 22.5 });
+    body += `  </g>\n`;
+  
+    body += `  <path d="${starPath(cx, cy, 10, 30, 13)}" fill="${palette.center}"/>\n`;
+    body += `  <circle cx="${cx}" cy="${cy}" r="9" fill="#2A2118"/>\n`;
+    body += `  <circle cx="${cx}" cy="${cy}" r="4.5" fill="${palette.center}"/>\n`;
+  
+    // 32 tiny connector dots between the outer ring's petal bases — cheap way
+    // to add genuine fine detail (good stress test for the size tiers) without
+    // hurting the overall silhouette.
+    body += '  <g fill="#1F2530" opacity="0.5">\n';
+    for (let i = 0; i < 32; i++) {
+      const a = (360 / 32) * i;
+      const p = rot(cx + 150, cy, cx, cy, a);
+      body += `    <circle cx="${num(p.x)}" cy="${num(p.y)}" r="1.6"/>\n`;
+    }
+    body += '  </g>\n';
+  
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">\n`
+      + `  <rect x="0" y="0" width="400" height="400" fill="#0B0D10"/>\n`
+      + body
+      + `</svg>\n`;
+  }
+  
+
+  return { generateMandalaSVG };
+})();
+
+/* ===================== DetailTier: optional path-simplification pass =====================
+   Adds three output-size presets (Ringan/Sedang/Berat) on top of AMEngine's existing,
+   untouched extraction + XML output. 'Berat' is a pure pass-through — byte-identical to
+   today's behavior — so the default experience never changes unless the person picks a
+   lighter tier. Ringan/Sedang merge runs of a shape's own path vertices into fewer,
+   tangent-fit curves, but only where that stays within a tolerance measured against that
+   shape's own size — so genuine detail (a sharp corner, a small feature) is never
+   simplified away, only real redundancy (oversampled/traced curves tend to have). */
+const DetailTier = (() => {
+  // ============================================================
+  // detail-tier.js — adapts the already-validated merge/simplify
+  // algorithm (from the earlier standalone build) to AMEngine's own
+  // subpath format: an array of {type:'M'|'L'|'C'|'Z', x,y,x1,y1,x2,y2}
+  // command objects, rather than an explicit p0-per-segment list.
+  // Pure data transformation, no DOM/canvas dependency.
+  // ============================================================
+  
+  const DETAIL_TIERS = {
+    berat:  { key: 'berat',  label: 'Berat',  mergeTolPct: 0 },
+    sedang: { key: 'sedang', label: 'Sedang', mergeTolPct: 0.005 },
+    ringan: { key: 'ringan', label: 'Ringan', mergeTolPct: 0.012 },
+  };
+  
+  function lerp(a, b, t) { return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; }
+  function sub(a, b) { return { x: a.x - b.x, y: a.y - b.y }; }
+  function add(a, b) { return { x: a.x + b.x, y: a.y + b.y }; }
+  function scl(a, s) { return { x: a.x * s, y: a.y * s }; }
+  function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function norm(a) { const l = Math.hypot(a.x, a.y) || 1; return { x: a.x / l, y: a.y / l }; }
+  
+  // AMEngine command list -> {segments:[{p0,c1,c2,p1,linear}], closed}
+  function amSubpathToSegments(amSubpath) {
+    const segments = [];
+    let cur = null, start = null, closed = false;
+    for (const c of amSubpath) {
+      if (c.type === 'M') { cur = { x: c.x, y: c.y }; start = cur; }
+      else if (c.type === 'L') {
+        const p1 = { x: c.x, y: c.y };
+        if (cur) segments.push({ p0: cur, c1: lerp(cur, p1, 1 / 3), c2: lerp(cur, p1, 2 / 3), p1, linear: true });
+        cur = p1;
+      } else if (c.type === 'C') {
+        const p1 = { x: c.x, y: c.y };
+        if (cur) segments.push({ p0: cur, c1: { x: c.x1, y: c.y1 }, c2: { x: c.x2, y: c.y2 }, p1, linear: false });
+        cur = p1;
+      } else if (c.type === 'Z') {
+        // Deliberately NOT synthesizing an explicit closing segment here even when
+        // cur !== start — Z already implies "close with a straight line back to the
+        // subpath's start" per SVG/AM path semantics, exactly like the untouched
+        // source data already relies on (e.g. AMEngine's own polygonToD output).
+        // `segments` therefore only ever holds the EXPLICIT commands the source
+        // actually specified, so simplification never fabricates a token that
+        // wasn't already going to be drawn, and the round trip can't inflate a
+        // subpath that had nothing worth merging.
+        closed = true;
+        cur = start;
+      }
+    }
+    return { segments, closed };
+  }
+  
+  // {segments,closed} -> AMEngine command list
+  function segmentsToAmSubpath(processed) {
+    const out = [];
+    if (!processed.segments.length) return out;
+    out.push({ type: 'M', x: processed.segments[0].p0.x, y: processed.segments[0].p0.y });
+    for (const s of processed.segments) {
+      if (s.linear) out.push({ type: 'L', x: s.p1.x, y: s.p1.y });
+      else out.push({ type: 'C', x1: s.c1.x, y1: s.c1.y, x2: s.c2.x, y2: s.c2.y, x: s.p1.x, y: s.p1.y });
+    }
+    if (processed.closed) out.push({ type: 'Z' });
+    return out;
+  }
+  
+  // ---- same merge algorithm validated in the earlier standalone build ----
+  function flattenCubicAdaptive(seg, tolerance, depth) {
+    depth = depth || 0;
+    const { p0, c1, c2, p1 } = seg;
+    function ptLineDist(p, a, b) {
+      const dx = b.x - a.x, dy = b.y - a.y;
+      const len = Math.hypot(dx, dy);
+      if (len < 1e-9) return Math.hypot(p.x - a.x, p.y - a.y);
+      return Math.abs((p.x - a.x) * dy - (p.y - a.y) * dx) / len;
+    }
+    const d1 = ptLineDist(c1, p0, p1), d2 = ptLineDist(c2, p0, p1);
+    if ((d1 + d2) < tolerance || depth > 18) return [p1];
+    const mid = (a, b) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+    const p01 = mid(p0, c1), p12 = mid(c1, c2), p23 = mid(c2, p1);
+    const p012 = mid(p01, p12), p123 = mid(p12, p23);
+    const p0123 = mid(p012, p123);
+    const left = flattenCubicAdaptive({ p0, c1: p01, c2: p012, p1: p0123 }, tolerance, depth + 1);
+    const right = flattenCubicAdaptive({ p0: p0123, c1: p123, c2: p23, p1 }, tolerance, depth + 1);
+    return left.concat(right);
+  }
+  function segDist(p, a, b) {
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len2 = dx * dx + dy * dy;
+    if (len2 < 1e-12) return Math.hypot(p.x - a.x, p.y - a.y);
+    let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  }
+  function polylineOfRun(segs, iStart, iEnd) {
+    const pts = [segs[iStart].p0];
+    for (let k = iStart; k <= iEnd; k++) {
+      const s = segs[k];
+      if (s.linear) pts.push(s.p1); else pts.push(...flattenCubicAdaptive(s, 0.15));
+    }
+    return pts;
+  }
+  function maxPointToPolylineDist(pts, poly) {
+    let maxD = 0;
+    for (const p of pts) {
+      let minD = poly.length === 1 ? Math.hypot(p.x - poly[0].x, p.y - poly[0].y) : Infinity;
+      for (let i = 0; i < poly.length - 1; i++) { const d = segDist(p, poly[i], poly[i + 1]); if (d < minD) minD = d; }
+      if (minD > maxD) maxD = minD;
+    }
+    return maxD;
+  }
+  function fitBezierSpan(segs, iStart, iEnd) {
+    const p0 = segs[iStart].p0, p3 = segs[iEnd].p1;
+    const startTanPt = segs[iStart].linear ? segs[iStart].p1 : segs[iStart].c1;
+    const endTanPt = segs[iEnd].linear ? segs[iEnd].p0 : segs[iEnd].c2;
+    const chordDir = norm(sub(p3, p0));
+    let t0 = norm(sub(startTanPt, p0)), t1 = norm(sub(p3, endTanPt));
+    if (!isFinite(t0.x) || (t0.x === 0 && t0.y === 0)) t0 = chordDir;
+    if (!isFinite(t1.x) || (t1.x === 0 && t1.y === 0)) t1 = chordDir;
+    const d = dist(p0, p3) / 3;
+    return { p0, c1: add(p0, scl(t0, d)), c2: sub(p3, scl(t1, d)), p1: p3 };
+  }
+  function mergeSegmentsForTier(segs, tolerance) {
+    if (segs.length <= 1 || tolerance <= 0) return segs.slice();
+    const result = [];
+    let i = 0;
+    while (i < segs.length) {
+      let j = i, best = segs[i];
+      while (j + 1 < segs.length) {
+        const cand = j + 1;
+        const merged = fitBezierSpan(segs, i, cand);
+        const origPts = polylineOfRun(segs, i, cand);
+        const mergedPts = [merged.p0, ...flattenCubicAdaptive(merged, 0.15)];
+        const err = Math.max(maxPointToPolylineDist(origPts, mergedPts), maxPointToPolylineDist(mergedPts, origPts));
+        if (err <= tolerance) { best = merged; j = cand; } else break;
+      }
+      result.push(best);
+      i = j + 1;
+    }
+    return result;
+  }
+  
+  function bboxDiagOf(segments) {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const s of segments) for (const p of [s.p0, s.c1, s.c2, s.p1]) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    if (!isFinite(minX)) return 1;
+    return Math.hypot(maxX - minX, maxY - minY) || 1;
+  }
+  
+  // shapes: AMEngine's res.shapes array. tierKey: 'ringan'|'sedang'|'berat'.
+  // 'berat' (or an unrecognized key) returns the SAME array reference untouched
+  // — zero cost, zero risk, exactly today's existing behavior.
+  function applyDetailTier(shapes, tierKey) {
+    const cfg = DETAIL_TIERS[tierKey];
+    if (!cfg || cfg.mergeTolPct <= 0) return shapes;
+    return shapes.map((shape) => {
+      const newSubpaths = shape.subpaths.map((amSp) => {
+        const { segments, closed } = amSubpathToSegments(amSp);
+        if (segments.length <= 1) return amSp;
+        const tolerance = bboxDiagOf(segments) * cfg.mergeTolPct;
+        const merged = mergeSegmentsForTier(segments, tolerance);
+        return segmentsToAmSubpath({ segments: merged, closed });
+      });
+      return Object.assign({}, shape, { subpaths: newSubpaths });
+    });
+  }
+  
+
+  return { DETAIL_TIERS, applyDetailTier };
+})();
 </script>
 <script>
 (() => {
@@ -3176,7 +5200,25 @@ if (typeof module !== "undefined") module.exports = AMEngine;
   const previewBox = $("previewBox");
   const metaLine = $("metaLine");
   const shapeCountEl = $("shapeCount");
+  const sizeEstimateEl = $("sizeEstimate");
   const warnList = $("warnList");
+  const compareToggle = $("compareToggle");
+  const comparePanel = $("comparePanel");
+  const compareBox = $("compareBox");
+  const compareBefore = $("compareBefore");
+  const compareAfter = $("compareAfter");
+  const compareDivider = $("compareDivider");
+  const reconViewToggle = $("reconViewToggle");
+  const reconViewPanel = $("reconViewPanel");
+  const reconViewChips = $("reconViewChips");
+  const reconViewBox = $("reconViewBox");
+  const reconStatsLine = $("reconStatsLine");
+  const reconShapeCountEl = $("reconShapeCount");
+  const reconNativeCountEl = $("reconNativeCount");
+  const reconPathCountEl = $("reconPathCount");
+  const reconAnchorCountEl = $("reconAnchorCount");
+  const reconKindBreakdown = $("reconKindBreakdown");
+  const reconLegend = $("reconLegend");
 
   const stageSettings = $("stageSettings");
   const settingsToggle = $("settingsToggle");
@@ -3191,6 +5233,17 @@ if (typeof module !== "undefined") module.exports = AMEngine;
   const bgColor = $("bgColor");
   const fpsChips = $("fpsChips");
   const durationInput = $("durationInput");
+  const detailChips = $("detailChips");
+  const nativeShapeChips = $("nativeShapeChips");
+  const textDetectChips = $("textDetectChips");
+  const textDetectField = $("textDetectField");
+  const modeField = $("modeField");
+  const modeChips = $("modeChips");
+  const reconFields = $("reconFields");
+  const reconSliderIds = { detail: "reconDetail", shape: "reconShape", corner: "reconCorner", smooth: "reconSmooth", noise: "reconNoise", stroke: "reconStroke", colors: "reconColors" };
+  const reconSliders = {};
+  for (const k in reconSliderIds) reconSliders[k] = { input: $(reconSliderIds[k]), val: $(reconSliderIds[k] + "Val") };
+  const sampleBtn = $("sampleBtn");
 
   const convertZone = $("convertZone");
   const convertBtn = $("convertBtn");
@@ -3201,14 +5254,22 @@ if (typeof module !== "undefined") module.exports = AMEngine;
   const downloadBtn = $("downloadBtn");
   const copyBtn = $("copyBtn");
   const toast = $("toast");
+  const svgHost = $("svgHost");
 
   const dotInput = $("dotInput"), dotPreview = $("dotPreview"), dotSettings = $("dotSettings"), dotOutput = $("dotOutput");
 
   /* ---------- State ---------- */
-  let liveSvgEl = null;      // the parsed SVG element currently attached inside previewBox
+  let liveSvgEl = null;      // the parsed SVG element, kept attached inside the hidden svgHost
+                              // (never inside previewBox - previewBox only shows the real,
+                              // already-extracted/traced result; see renderPreview below)
   let sourceLabel = "";      // filename or "SVG tempel" for the title/output filename
-  let lastExtraction = null; // {shapes, warnings, viewport}
+  let lastExtraction = null; // {shapes, warnings, viewport, canvasWidth, canvasHeight}
   let lastXml = "";
+  let lastRasterDataUrl = null; // data: URL of the original PNG/JPG upload, if any (for the
+                                 // small "before" badge on the real preview); null for SVG input
+  let lastReconResult = null;   // {cleanSvg, detectedSvg, stats, warnings} from the last Smart
+                                 // Shape Reconstruction pass - only set in reconstruct mode
+  let reconViewMode = "original"; // which tab reconViewBox is currently showing
 
   const settings = {
     canvas: "native",   // native | square | story | custom
@@ -3219,6 +5280,24 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     bgColor: "#ffffff",
     fps: 30,
     duration: 3,
+    detail: "berat",    // ringan | sedang | berat — path detail/size preset (see DetailTier
+                         // above); "berat" is a pure pass-through, so this defaults to
+                         // exactly today's existing behaviour until the person changes it.
+    nativeShapes: true, // when a shape's contour matches a rect/roundrect/circle/wideline
+                         // within tolerance, export it as that native AM shape instead of
+                         // a generic <path> (see AMEngine's planPrimitiveShapes).
+    detectText: true,   // OCR raster <image> content; a confidently-read line becomes a
+                         // native AM text layer instead of a traced path blob (see
+                         // AMEngine.recognizeImageText). Needs network access on first use
+                         // (Tesseract.js + language data from CDN) - off falls back to
+                         // exactly today's full vector trace for every image.
+    mode: "trace",       // trace | reconstruct — raster-only; "trace" is byte-for-byte today's
+                         // existing wrapRasterAsSvg -> quantizeAndTrace path. "reconstruct" runs
+                         // AMEngine.reconstructFromImageData instead (see below) and hands ITS
+                         // plain SVG output to the exact same loadSvgText/reExtract/buildProjectXML
+                         // pipeline - nothing downstream of loadSvgText knows or cares which mode
+                         // produced the SVG it received.
+    recon: { detail: 45, shape: 60, corner: 50, smooth: 55, noise: 50, stroke: 60, colors: 50 },
   };
 
   /* ---------- Helpers ---------- */
@@ -3244,7 +5323,10 @@ if (typeof module !== "undefined") module.exports = AMEngine;
   }
   function updateSettingsSummary() {
     const bg = settings.bg === "transparent" ? "transparan" : "latar warna";
-    settingsCurrent.textContent = `${canvasLabel()} · ${bg} · ${settings.fps}fps · ${settings.duration} detik`;
+    const detailLabel = DetailTier.DETAIL_TIERS[settings.detail]?.label || "Berat";
+    const shapeLabel = settings.nativeShapes ? "shape AM otomatis" : "selalu path";
+    const textLabel = settings.mode === "reconstruct" ? "mode Smart Shape Reconstruction" : settings.detectText ? "OCR teks aktif" : "OCR teks nonaktif";
+    settingsCurrent.textContent = `${canvasLabel()} · ${bg} · ${settings.fps}fps · ${settings.duration} detik · detail ${detailLabel} · ${shapeLabel} · ${textLabel}`;
   }
 
   function targetCanvasSize() {
@@ -3301,7 +5383,7 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     // extractShapes already applies mtranslate(-minX,-minY) as its root matrix (native space).
     // The extra canvas-fit matrix (when overriding canvas size) is applied afterward, directly
     // to each shape's already-centered local geometry plus its center, then re-centered again.
-    const res = await AMEngine.extractShapes(liveSvgEl);
+    const res = await AMEngine.extractShapes(liveSvgEl, { detectText: settings.detectText });
     if (myGen !== extractGeneration) return null; // a newer extraction superseded this one
 
     if (settings.canvas !== "native") {
@@ -3334,21 +5416,171 @@ if (typeof module !== "undefined") module.exports = AMEngine;
         }));
         return { ...shape, subpaths: centered, center: newCenter };
       });
+
+      // Text layers have no subpaths to re-center around - just their own axis-aligned box -
+      // so re-fit that box through the same outerMatrix and rebuild center/halfW/halfH from
+      // its transformed corners. fontSize is rescaled by the resulting height ratio: exact for
+      // "contain" fit (uniform scale), a reasonable approximation for "stretch" (non-uniform).
+      res.textLayers = (res.textLayers || []).map((t) => {
+        const corners = [
+          AMEngine.mpoint(outerMatrix, t.center.x - t.halfW, t.center.y - t.halfH),
+          AMEngine.mpoint(outerMatrix, t.center.x + t.halfW, t.center.y - t.halfH),
+          AMEngine.mpoint(outerMatrix, t.center.x + t.halfW, t.center.y + t.halfH),
+          AMEngine.mpoint(outerMatrix, t.center.x - t.halfW, t.center.y + t.halfH),
+        ];
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        for (const c of corners) {
+          if (c.x < minX) minX = c.x; if (c.x > maxX) maxX = c.x;
+          if (c.y < minY) minY = c.y; if (c.y > maxY) maxY = c.y;
+        }
+        const halfW = (maxX - minX) / 2, halfH = (maxY - minY) / 2;
+        const scaleH = t.halfH > 0 ? halfH / t.halfH : 1;
+        return { ...t, center: { x: (minX + maxX) / 2, y: (minY + maxY) / 2 }, halfW, halfH, fontSize: t.fontSize * scaleH };
+      });
     }
 
     res.canvasWidth = targetW;
     res.canvasHeight = targetH;
+    res.shapes = DetailTier.applyDetailTier(res.shapes, settings.detail); // no-op at "berat"
     lastExtraction = res;
     return res;
+  }
+
+  /* ---------- Real preview: render the ACTUAL extracted/traced shapes as SVG ----------
+     Single source of truth with the exported XML: every <path d="..."> below comes from the
+     exact same AMEngine.serializeSubpaths call buildProjectXML uses for that same shape, so
+     what's on screen is never a stand-in for the real thing - not the raw source SVG, and
+     never the original photo for a PNG/JPG upload. If a region got missed, garbled, or turned
+     the wrong color during tracing, it shows up right here, before anything is downloaded. */
+  function shapesToPreviewSvg(shapes, width, height) {
+    let paths = "";
+    for (const shape of shapes) {
+      const d = AMEngine.serializeSubpaths(shape.subpaths);
+      if (!d) continue; // defensive only - extraction never emits a shape with empty geometry
+      const { r, g, b, a } = shape.fill;
+      const tx = AMEngine.fmtFixed6(shape.center.x);
+      const ty = AMEngine.fmtFixed6(shape.center.y);
+      paths += `<path d="${AMEngine.xmlEscape(d)}" fill="rgba(${r},${g},${b},${a})" transform="translate(${tx},${ty})"/>`;
+    }
+    const w = Math.max(1, width || 1);
+    const h = Math.max(1, height || 1);
+    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="xMidYMid meet">${paths}</svg>`;
+  }
+
+  function renderPreview(res) {
+    if (!res) return;
+    if (!res.shapes.length) {
+      previewBox.innerHTML = '<div class="preview-empty">Tidak ada bentuk dengan isi warna yang terdeteksi.</div>';
+      return;
+    }
+    const svgMarkup = shapesToPreviewSvg(res.shapes, res.canvasWidth, res.canvasHeight);
+    const badge = lastRasterDataUrl
+      ? `<div class="preview-original-badge" title="Gambar asli sebelum divektorkan"><img src="${lastRasterDataUrl}" alt="Gambar asli sebelum divektorkan"/></div>`
+      : "";
+    previewBox.innerHTML = svgMarkup + badge;
+  }
+
+  /* ---------- Size estimate (reflects the currently selected detail tier) ---------- */
+  function updateSizeEstimate(res) {
+    if (!sizeEstimateEl || !res) return;
+    const bgHex =
+      settings.bg === "transparent"
+        ? "#00000000"
+        : "#ff" + settings.bgColor.replace("#", "").toLowerCase();
+    const xml = AMEngine.buildProjectXML(res.shapes, res.textLayers || [], {
+      title: sourceLabel || "SVG Import",
+      width: res.canvasWidth,
+      height: res.canvasHeight,
+      fps: settings.fps,
+      totalTimeMs: Math.round(settings.duration * 1000),
+      bgcolor: bgHex,
+      nativeShapes: settings.nativeShapes,
+    });
+    const bytes = new Blob([xml]).size;
+    sizeEstimateEl.textContent = bytes < 1024 ? `${bytes} B` : `${(bytes / 1024).toFixed(1)} KB`;
+  }
+
+  /* ---------- Before/after compare slider ----------
+     "After" reuses shapesToPreviewSvg — the exact same traced-result renderer the main
+     preview above already uses — so the comparison can never drift from what's real.
+     "Before" is the original input, rendered as an <img> (SVG-as-image or the original
+     raster) rather than injected as live markup, so nothing in an untrusted uploaded
+     file can execute. */
+  function svgToImgTag(svgText, alt) {
+    const b64 = btoa(unescape(encodeURIComponent(svgText)));
+    return `<img src="data:image/svg+xml;base64,${b64}" alt="${alt}">`;
+  }
+  function updateCompareSlider(res) {
+    if (!compareBox || !liveSvgEl || !res) return;
+    const beforeHtml = lastRasterDataUrl
+      ? `<img src="${lastRasterDataUrl}" alt="Gambar asli">`
+      : svgToImgTag(new XMLSerializer().serializeToString(liveSvgEl), "SVG asli");
+    compareBefore.innerHTML = beforeHtml;
+    const afterSvg = shapesToPreviewSvg(res.shapes, res.canvasWidth, res.canvasHeight);
+    compareAfter.innerHTML = svgToImgTag(afterSvg, "Hasil parsing");
+    setComparePct(50);
+  }
+  let compareDragging = false;
+  function setComparePct(pct) {
+    pct = Math.max(0, Math.min(100, pct));
+    compareAfter.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
+    compareDivider.style.left = pct + "%";
+  }
+  function comparePctFromEvent(e) {
+    const rect = compareBox.getBoundingClientRect();
+    return ((e.clientX - rect.left) / rect.width) * 100;
+  }
+  if (compareBox) {
+    compareBox.addEventListener("pointerdown", (e) => {
+      compareDragging = true;
+      try { compareBox.setPointerCapture(e.pointerId); } catch (err) {}
+      setComparePct(comparePctFromEvent(e));
+    });
+    compareBox.addEventListener("pointermove", (e) => {
+      if (compareDragging) setComparePct(comparePctFromEvent(e));
+    });
+    window.addEventListener("pointerup", () => { compareDragging = false; });
+    compareBox.addEventListener("pointercancel", () => { compareDragging = false; });
+    compareBox.addEventListener("keydown", (e) => {
+      const cur = parseFloat(compareDivider.style.left) || 50;
+      if (e.key === "ArrowLeft") setComparePct(cur - 5);
+      if (e.key === "ArrowRight") setComparePct(cur + 5);
+    });
+  }
+  if (compareToggle) {
+    compareToggle.addEventListener("click", () => {
+      const open = comparePanel.classList.toggle("open");
+      compareToggle.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+  }
+  if (reconViewToggle) {
+    reconViewToggle.addEventListener("click", () => {
+      const open = reconViewPanel.classList.toggle("open");
+      reconViewToggle.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) renderReconView(reconViewMode);
+    });
+  }
+  if (reconViewChips) {
+    reconViewChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      renderReconView(chip.dataset.view);
+    });
   }
 
   async function refreshPreviewMeta() {
     metaLine.style.display = "flex";
     shapeCountEl.textContent = "…";
+    if (settings.detectText && liveSvgEl && liveSvgEl.querySelector("image")) {
+      showToast("Mendeteksi teks pada gambar…");
+    }
     const res = await reExtract();
     if (!res) return; // superseded by a newer extraction, or no SVG loaded
     metaLine.style.display = "flex";
     shapeCountEl.textContent = String(res.shapes.length);
+    renderPreview(res);
+    updateCompareSlider(res);
+    updateSizeEstimate(res);
 
     if (res.warnings.length) {
       warnList.style.display = "flex";
@@ -3385,17 +5617,21 @@ if (typeof module !== "undefined") module.exports = AMEngine;
       return;
     }
 
-    previewBox.innerHTML = "";
+    // The parsed SVG goes into the hidden svgHost, never into previewBox: getComputedStyle
+    // (used throughout extraction) needs the element attached to the document to resolve
+    // correctly, but previewBox itself only ever shows the real, already-extracted/traced
+    // result (see renderPreview) - so what the person sees always matches what gets exported.
+    // width/height attributes are kept intact (unlike the old code, which stripped them for
+    // display purposes): getViewport() falls back to reading them when there's no viewBox, and
+    // now that this element is never shown directly (see above), there's no display reason left
+    // to remove them - doing so was actually making viewBox-less SVGs report a wrong 512x512
+    // fallback size instead of their real dimensions, both here and inside extractShapes itself.
+    svgHost.innerHTML = "";
     const imported = document.importNode(root, true);
-    imported.removeAttribute("width");
-    imported.removeAttribute("height");
-    imported.style.maxWidth = "100%";
-    imported.style.maxHeight = "14rem";
-    imported.style.width = "auto";
-    imported.style.height = "auto";
-    previewBox.appendChild(imported);
+    svgHost.appendChild(imported);
     liveSvgEl = imported;
     sourceLabel = label;
+    previewBox.innerHTML = '<div class="preview-empty">Menganalisis…</div>';
 
     dotInput.classList.add("done");
     stagePreview.style.display = "";
@@ -3419,7 +5655,9 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     stageSettings.style.display = "none";
     convertZone.style.display = "none";
     stageOutput.style.display = "none";
+    svgHost.innerHTML = "";
     liveSvgEl = null;
+    lastRasterDataUrl = null;
   }
 
   function clearFile() {
@@ -3433,8 +5671,11 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     stageSettings.style.display = "none";
     convertZone.style.display = "none";
     stageOutput.style.display = "none";
+    svgHost.innerHTML = "";
     liveSvgEl = null;
     lastExtraction = null;
+    lastRasterDataUrl = null;
+    setRasterModeUI(false);
     dotInput.classList.remove("done");
     dotPreview.classList.remove("done");
   }
@@ -3458,6 +5699,101 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     });
   }
 
+  /* ---------- Smart Shape Reconstruction: mode-2 alternative to wrapRasterAsSvg ----------
+     wrapRasterAsSvg (above) hands the raster straight to the existing <image>-in-SVG path,
+     unchanged. This instead runs AMEngine.reconstructFromImageData and hands ITS plain SVG
+     string to the exact same loadSvgText() the file/paste/sample flows already use - so
+     everything past that point (reExtract, the real preview, the compare slider,
+     buildProjectXML) is the SAME code either way, for BOTH modes. */
+  function reconOptsFromSettings() {
+    return {
+      detail: settings.recon.detail, shape: settings.recon.shape, corner: settings.recon.corner,
+      smooth: settings.recon.smooth, noise: settings.recon.noise, stroke: settings.recon.stroke,
+      colors: settings.recon.colors,
+    };
+  }
+
+  function setRasterModeUI(active) {
+    modeField.style.display = active ? "" : "none";
+    reconViewToggle.style.display = active && settings.mode === "reconstruct" ? "" : "none";
+    if (!active) {
+      lastReconResult = null;
+      reconViewPanel.classList.remove("open");
+      reconViewToggle.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  async function reconstructRasterAsSvg(dataUrl) {
+    const source = await AMEngine.reconLoadSource(dataUrl);
+    const result = AMEngine.reconstructFromImageData(source, reconOptsFromSettings());
+    lastReconResult = result;
+    return result.cleanSvg;
+  }
+
+  // Shared by the file/drop input AND by mode/slider changes on an already-loaded raster -
+  // both need "turn this data URL into an SVG and load it" with the SAME trace/reconstruct
+  // branch, so there is exactly one place that decides which.
+  async function processRasterDataUrl(dataUrl, label) {
+    lastRasterDataUrl = dataUrl;
+    setRasterModeUI(true);
+    try {
+      const svgWrapper =
+        settings.mode === "reconstruct" ? await reconstructRasterAsSvg(dataUrl) : await wrapRasterAsSvg(dataUrl);
+      loadSvgText(svgWrapper, label);
+      refreshReconPanel();
+    } catch (e) {
+      showParseError("Gambar tidak bisa dibaca. Coba file PNG/JPG lain.");
+    }
+  }
+
+  function reconKindLabel(k) {
+    return { ellipse: "lingkaran/elips", rect: "kotak", roundrect: "kotak membulat", wideline: "garis", border: "border/stroke", polygon: "polygon (path)", curve: "path halus" }[k] || k;
+  }
+
+  function renderReconView(which) {
+    reconViewMode = which;
+    setChipGroup(reconViewChips, "view", which);
+    if (which === "original") {
+      reconViewBox.innerHTML = lastRasterDataUrl ? `<img src="${lastRasterDataUrl}" alt="Gambar asli" style="max-width:100%;max-height:14rem;width:auto;height:auto;">` : '<div class="preview-empty">Belum ada gambar</div>';
+      return;
+    }
+    if (!lastReconResult) {
+      reconViewBox.innerHTML = '<div class="preview-empty">Belum ada pratinjau</div>';
+      return;
+    }
+    const svg = which === "detected" ? lastReconResult.detectedSvg : lastReconResult.cleanSvg;
+    reconViewBox.innerHTML = svg || '<div class="preview-empty">Tidak ada bentuk</div>';
+  }
+
+  // Refreshes the stats/legend and, if the panel is currently open, re-renders its active tab.
+  // Called after every reconstruct-mode (re)processing; a no-op outside that mode.
+  function refreshReconPanel() {
+    if (settings.mode !== "reconstruct" || !lastReconResult) {
+      reconStatsLine.style.display = "none";
+      reconLegend.style.display = "none";
+      reconKindBreakdown.textContent = "";
+      if (settings.mode !== "reconstruct" && reconViewPanel.classList.contains("open")) {
+        reconViewPanel.classList.remove("open");
+        reconViewToggle.setAttribute("aria-expanded", "false");
+      } else if (reconViewPanel.classList.contains("open")) {
+        renderReconView(reconViewMode);
+      }
+      return;
+    }
+    const s = lastReconResult.stats;
+    reconStatsLine.style.display = "flex";
+    reconShapeCountEl.textContent = String(s.shapes);
+    reconNativeCountEl.textContent = String(s.native);
+    reconPathCountEl.textContent = String(s.paths);
+    reconAnchorCountEl.textContent = String(s.anchors);
+    const parts = Object.keys(s.kinds)
+      .filter((k) => s.kinds[k] > 0)
+      .map((k) => `${s.kinds[k]} ${reconKindLabel(k)}`);
+    reconKindBreakdown.textContent = parts.length ? parts.join(" · ") : "";
+    reconLegend.style.display = s.shapes > 0 ? "flex" : "none";
+    if (reconViewPanel.classList.contains("open")) renderReconView(reconViewMode);
+  }
+
   function handleIncomingFile(f) {
     const isRaster = RASTER_EXT_RE.test(f.name) || RASTER_MIME_RE.test(f.type);
     fileChipName.textContent = f.name;
@@ -3465,19 +5801,14 @@ if (typeof module !== "undefined") module.exports = AMEngine;
 
     if (isRaster) {
       const reader = new FileReader();
-      reader.onload = async () => {
-        try {
-          const svgWrapper = await wrapRasterAsSvg(String(reader.result));
-          loadSvgText(svgWrapper, f.name.replace(RASTER_EXT_RE, ""));
-        } catch (e) {
-          showParseError("Gambar tidak bisa dibaca. Coba file PNG/JPG lain.");
-        }
-      };
+      reader.onload = () => processRasterDataUrl(String(reader.result), f.name.replace(RASTER_EXT_RE, ""));
       reader.onerror = () => showParseError("Gagal membaca file. Coba lagi.");
       reader.readAsDataURL(f);
       return;
     }
 
+    lastRasterDataUrl = null; // vector SVG input has no "original raster" to badge
+    setRasterModeUI(false);
     const reader = new FileReader();
     reader.onload = () => loadSvgText(String(reader.result), f.name.replace(/\.svg$/i, ""));
     reader.onerror = () => showParseError("Gagal membaca file. Coba lagi.");
@@ -3489,6 +5820,15 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     if (!f) return;
     handleIncomingFile(f);
   });
+
+  if (sampleBtn) {
+    sampleBtn.addEventListener("click", () => {
+      fileChip.classList.remove("show");
+      lastRasterDataUrl = null; // procedural sample has no "original raster" to badge
+      setRasterModeUI(false);
+      loadSvgText(SampleArt.generateMandalaSVG(), "Contoh rumit");
+    });
+  }
 
   fileChipClear.addEventListener("click", (e) => {
     e.preventDefault();
@@ -3525,6 +5865,8 @@ if (typeof module !== "undefined") module.exports = AMEngine;
       const text = pasteArea.value.trim();
       if (!text) return;
       fileChip.classList.remove("show");
+      lastRasterDataUrl = null; // pasted SVG code has no "original raster" to badge
+      setRasterModeUI(false);
       loadSvgText(text, "SVG_tempel");
     }, 450);
   });
@@ -3580,6 +5922,76 @@ if (typeof module !== "undefined") module.exports = AMEngine;
     updateSettingsSummary();
   });
 
+  if (detailChips) {
+    detailChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      settings.detail = chip.dataset.detail;
+      setChipGroup(detailChips, "detail", settings.detail);
+      updateSettingsSummary();
+      if (liveSvgEl) refreshPreviewMeta();
+    });
+  }
+
+  if (nativeShapeChips) {
+    nativeShapeChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      settings.nativeShapes = chip.dataset.nativeshape === "on";
+      setChipGroup(nativeShapeChips, "nativeshape", chip.dataset.nativeshape);
+      updateSettingsSummary();
+      if (liveSvgEl) refreshPreviewMeta();
+    });
+  }
+
+  /* ---------- Smart Shape Reconstruction: mode switch + 7 controls ----------
+     A raster already loaded gets reprocessed from its own cached data URL - the person never
+     has to re-pick the file just to compare modes or nudge a slider. */
+  let reconDebounce;
+  function scheduleReconReprocess() {
+    if (settings.mode !== "reconstruct" || !lastRasterDataUrl) return;
+    clearTimeout(reconDebounce);
+    reconDebounce = setTimeout(() => processRasterDataUrl(lastRasterDataUrl, sourceLabel), 400);
+  }
+
+  if (modeChips) {
+    modeChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      settings.mode = chip.dataset.mode;
+      setChipGroup(modeChips, "mode", settings.mode);
+      reconFields.classList.toggle("show", settings.mode === "reconstruct");
+      textDetectField.style.display = settings.mode === "reconstruct" ? "none" : "";
+      reconViewToggle.style.display = lastRasterDataUrl && settings.mode === "reconstruct" ? "" : "none";
+      updateSettingsSummary();
+      if (lastRasterDataUrl) processRasterDataUrl(lastRasterDataUrl, sourceLabel);
+    });
+  }
+
+  for (const key in reconSliders) {
+    const { input, val } = reconSliders[key];
+    if (!input) continue;
+    const paint = () => { input.style.setProperty("--pct", input.value + "%"); };
+    paint();
+    input.addEventListener("input", () => {
+      settings.recon[key] = Number(input.value);
+      val.textContent = input.value;
+      paint();
+      scheduleReconReprocess();
+    });
+  }
+
+  if (textDetectChips) {
+    textDetectChips.addEventListener("click", (e) => {
+      const chip = e.target.closest(".chip");
+      if (!chip) return;
+      settings.detectText = chip.dataset.textdetect === "on";
+      setChipGroup(textDetectChips, "textdetect", chip.dataset.textdetect);
+      updateSettingsSummary();
+      if (liveSvgEl) refreshPreviewMeta();
+    });
+  }
+
   settingsToggle.addEventListener("click", () => {
     const open = settingsBody.classList.toggle("open");
     settingsToggle.setAttribute("aria-expanded", open ? "true" : "false");
@@ -3607,17 +6019,21 @@ if (typeof module !== "undefined") module.exports = AMEngine;
         ? "#00000000"
         : "#ff" + settings.bgColor.replace("#", "").toLowerCase();
 
-    const xml = AMEngine.buildProjectXML(res.shapes, {
+    const xml = AMEngine.buildProjectXML(res.shapes, res.textLayers || [], {
       title: sourceLabel || "SVG Import",
       width: res.canvasWidth,
       height: res.canvasHeight,
       fps: settings.fps,
       totalTimeMs: Math.round(settings.duration * 1000),
       bgcolor: bgHex,
+      nativeShapes: settings.nativeShapes,
     });
     lastXml = xml;
 
-    resultText.textContent = `Berhasil dikonversi: ${res.shapes.length} bentuk siap diekspor.`;
+    const textCount = (res.textLayers || []).length;
+    resultText.textContent = textCount
+      ? `Berhasil dikonversi: ${res.shapes.length} bentuk + ${textCount} text layer (OCR) siap diekspor.`
+      : `Berhasil dikonversi: ${res.shapes.length} bentuk siap diekspor.`;
     codeBox.innerHTML = highlightXml(xml);
     stageOutput.style.display = "";
     dotSettings.classList.add("done");
