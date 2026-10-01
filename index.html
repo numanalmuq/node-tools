@@ -476,8 +476,10 @@ dialog#adminPanel .mrow input{flex:1;width:auto;min-width:0;margin-top:0}
 .ul-status.active{background:var(--blue);border-color:var(--blue);color:#fff}
 .ul-status.inactive{background:var(--line);border-color:var(--line);color:#57554f}
 
-/* Intro: splash + onboarding (sekali per perangkat, bisa dilewati) */
+/* Header (logo + tagline + menu) cuma tampil di Beranda; class no-top dipasang di showScreen() */
 .no-top .top{display:none}
+
+/* Intro: splash + onboarding (sekali per perangkat, bisa dilewati) */
 .intro{min-height:82vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1rem;text-align:center;padding:1.5rem 0}
 .splash .logomark{width:6.2rem;height:6.2rem;font-size:3rem;border-radius:22%;box-shadow:6px 6px 0 var(--ink);animation:pop .45s steps(4)}
 @keyframes pop{from{transform:scale(.55) rotate(-10deg)}}
@@ -526,7 +528,7 @@ dialog#adminPanel .mrow input{flex:1;width:auto;min-width:0;margin-top:0}
 .chart i{flex:1;min-height:3px;background:var(--yellow);border:2px solid var(--ink);border-bottom:0}
 .chart-cap{margin:.8rem 0 1.4rem;font-size:.7rem;color:#6b6a68}
 .seg{display:flex;gap:.5rem}
-body.is-detail main{padding-top:1.4rem}
+body.has-bar main{padding-top:1.4rem}
 .gift{display:flex;align-items:center;gap:.8rem;margin:0 0 .7rem;padding:.9rem 1.1rem;background:var(--green);color:var(--ink);border-radius:16px}
 .gift-t{flex:1;min-width:0;font:800 .82rem var(--sans);overflow-wrap:anywhere}
 .gift-t small{display:block;margin-top:.2rem;font:500 .66rem var(--mono);opacity:.8}
@@ -1072,8 +1074,8 @@ body.is-detail main{padding-top:1.4rem}
   function showScreen(name) {
     for (const key in screens) screens[key].hidden = key !== name;
     const chromeOn = ['home', 'tools', 'detail', 'profile', 'admin', 'chat'].includes(name);
-    document.body.classList.toggle('no-top', name === 'splash' || name === 'onboard' || name === 'detail');
-    document.body.classList.toggle('is-detail', name === 'detail');
+    document.body.classList.toggle('no-top', name !== 'home');
+    document.body.classList.toggle('has-bar', ['tools', 'detail', 'profile', 'admin', 'chat'].includes(name));
     menuWrap.hidden = !chromeOn;
     bottomNav.hidden = !chromeOn;
     navHome.classList.toggle('active', name === 'home' || name === 'admin');
