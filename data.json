@@ -17,8 +17,8 @@
       "description": "Membalik video sehingga video diputar dari akhir ke awal."
     },
     {
-      "name": "Animasi Logo",
-      "description": "Membuat svg menjadi animasi di Alight Motion"
+      "name": "AnimasiLogo",
+      "description": "Membuat svg menjadi animasi di Alight Motion."
     }
       
   ]
