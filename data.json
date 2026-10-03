@@ -19,6 +19,10 @@
     {
       "name": "AnimasiLogo",
       "description": "Membuat svg menjadi animasi di Alight Motion."
+    },
+    {
+      "name": "BackgroundRemover",
+      "description": "Membuat Foto bisa dihapus background nya."
     }
       
   ]
